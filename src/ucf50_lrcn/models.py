@@ -108,9 +108,10 @@ class LRCN(nn.Module):
         The input tensor x is expected to have the shape:
             (batch_size, time_steps, channels, height, width)
         
-        For each time step (frame), the CNN backbone extracts features. These features are then
-        passed through the LSTM sequentially. The output from the last time step is then passed
-        through dropout and the final fully-connected layer to produce the class logits.
+        All frames of all clips go through the CNN backbone in one call, so BatchNorm sees
+        batch_size * time_steps images rather than batch_size. The LSTM then runs over the whole
+        sequence of frame features. The output from the last time step is passed through dropout
+        and the final fully-connected layer to produce the class logits.
 
         Args:
             x (Tensor): Input tensor of shape (batch_size, time_steps, channels, height, width).
@@ -119,20 +120,12 @@ class LRCN(nn.Module):
             Tensor: Output logits for each sample in the batch with shape (batch_size, n_classes).
         """
         bs, ts, c, h, w = x.shape  # batch_size, time_steps, channels, height, width
-        
-        # Process the first frame separately to initialize the LSTM hidden and cell states.
-        idx = 0
-        y = self.base_model(x[:, idx])
-        _, (hn, cn) = self.rnn(y.unsqueeze(1))
-        
-        # Iterate over the remaining frames, feeding each frame's features into the LSTM.
-        for idx in range(1, ts):
-            y = self.base_model(x[:, idx])
-            out, (hn, cn) = self.rnn(y.unsqueeze(1), (hn, cn))
-        
+        features = self.base_model(x.reshape(bs * ts, c, h, w)).reshape(bs, ts, -1)
+        out, _ = self.rnn(features)
+
         # Apply dropout to the output of the final time step.
         out = self.dropout(out[:, -1])
-        
+
         # Pass the final output through the fully-connected layer to get class logits.
         out = self.fc(out)
         return out
