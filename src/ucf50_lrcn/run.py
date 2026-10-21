@@ -105,6 +105,8 @@ def args_parser(argv=None):
     parser.add_argument('-p', '--pretrained', type=str2bool, default=True,
                         help='Use the ImageNet-pretrained 2D CNN backbone (true/false)')
     parser.add_argument('-rhs', '--rnn_hidden_size', type=int, default=100, help='Number of neurons in the RNN/LSTM hidden layer')
+    parser.add_argument('-tp', '--temporal_pool', choices=['last', 'mean'], default='last',
+                        help="Classify from the last LSTM step, or average every step's logits")
     parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1, help='Number of RNN/LSTM layers')
 
     parser.add_argument('-m', '--mode', type=str, default='train', help="Either 'train' or 'eval'", required=True)
@@ -223,7 +225,8 @@ def main(args):
 
     # Initialize the model (LRCN)
     model = LRCN(hidden_size=rnn_hidden_size, n_layers=rnn_n_layers, dropout_rate=dropout,
-                 n_classes=n_classes, pretrained=pretrained, cnn_model=cnn_backbone)
+                 n_classes=n_classes, pretrained=pretrained, cnn_model=cnn_backbone,
+                 temporal_pool=args.temporal_pool)
 
     if mode == 'train':
         # Load dataset and split into train/validation/test

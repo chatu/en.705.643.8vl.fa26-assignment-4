@@ -68,12 +68,19 @@ class LRCN(nn.Module):
         cnn_model (str, optional): Specifies the ResNet variant to use as the backbone.
                                    Options: 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'.
                                    Default is 'resnet34'.
+        temporal_pool (str, optional): 'last' classifies from the final LSTM step; 'mean'
+                                       classifies every step and averages the logits over time,
+                                       as in the original LRCN. Default is 'last'.
     
     Raises:
-        ValueError: If the specified cnn_model is not supported.
+        ValueError: If the specified cnn_model or temporal_pool is not supported.
     """
-    def __init__(self, hidden_size, n_layers, dropout_rate, n_classes, pretrained=True, cnn_model='resnet34'):
+    def __init__(self, hidden_size, n_layers, dropout_rate, n_classes, pretrained=True,
+                 cnn_model='resnet34', temporal_pool='last'):
         super(LRCN, self).__init__()
+        if temporal_pool not in ('last', 'mean'):
+            raise ValueError("temporal_pool must be 'last' or 'mean'.")
+        self.temporal_pool = temporal_pool
 
         # Set up the ResNet backbone as a 2D CNN feature extractor. pretrained=True loads the
         # ImageNet-1k classification weights (IMAGENET1K_V1, what the deprecated pretrained=True
@@ -110,8 +117,9 @@ class LRCN(nn.Module):
         
         All frames of all clips go through the CNN backbone in one call, so BatchNorm sees
         batch_size * time_steps images rather than batch_size. The LSTM then runs over the whole
-        sequence of frame features. The output from the last time step is passed through dropout
-        and the final fully-connected layer to produce the class logits.
+        sequence of frame features. With temporal_pool='last' the output of the final time step
+        goes through dropout and the fully-connected layer; with 'mean' every time step does, and
+        the logits are averaged over time.
 
         Args:
             x (Tensor): Input tensor of shape (batch_size, time_steps, channels, height, width).
@@ -123,9 +131,6 @@ class LRCN(nn.Module):
         features = self.base_model(x.reshape(bs * ts, c, h, w)).reshape(bs, ts, -1)
         out, _ = self.rnn(features)
 
-        # Apply dropout to the output of the final time step.
-        out = self.dropout(out[:, -1])
-
-        # Pass the final output through the fully-connected layer to get class logits.
-        out = self.fc(out)
-        return out
+        if self.temporal_pool == 'mean':
+            return self.fc(self.dropout(out)).mean(dim=1)
+        return self.fc(self.dropout(out[:, -1]))
