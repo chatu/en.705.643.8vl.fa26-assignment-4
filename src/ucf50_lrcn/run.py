@@ -276,7 +276,8 @@ def main(args):
         # Load the trained model checkpoint and evaluate it on the test split
         ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms, flow_channels)
         test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
-        model.load_state_dict(torch.load(args.ckpt))
+        # map_location: checkpoints saved during GPU training must also load on a CPU-only machine
+        model.load_state_dict(torch.load(args.ckpt, map_location='cpu'))
         model.to(device)
         targets, outputs, accuracy, _ = evaluate_split(model, test_dl, device)
         # Optionally, generate a detailed test report or confusion matrix:
