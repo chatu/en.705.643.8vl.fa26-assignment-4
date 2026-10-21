@@ -16,6 +16,15 @@ Classes:
 import torch.nn as nn
 from torchvision import models
 
+# Supported backbones: name -> (builder, ImageNet-1k classification weights).
+BACKBONES = {
+    'resnet18': (models.resnet18, models.ResNet18_Weights.IMAGENET1K_V1),
+    'resnet34': (models.resnet34, models.ResNet34_Weights.IMAGENET1K_V1),
+    'resnet50': (models.resnet50, models.ResNet50_Weights.IMAGENET1K_V1),
+    'resnet101': (models.resnet101, models.ResNet101_Weights.IMAGENET1K_V1),
+    'resnet152': (models.resnet152, models.ResNet152_Weights.IMAGENET1K_V1),
+}
+
 class Identity(nn.Module):
     """
     A placeholder identity operator that is argument-insensitive.
@@ -66,19 +75,13 @@ class LRCN(nn.Module):
     def __init__(self, hidden_size, n_layers, dropout_rate, n_classes, pretrained=True, cnn_model='resnet34'):
         super(LRCN, self).__init__()
 
-        # Set up the ResNet backbone as a 2D CNN feature extractor.
-        if cnn_model == 'resnet18':
-            base_cnn = models.resnet18(pretrained=pretrained)
-        elif cnn_model == 'resnet34':
-            base_cnn = models.resnet34(pretrained=pretrained)
-        elif cnn_model == 'resnet50':
-            base_cnn = models.resnet50(pretrained=pretrained)
-        elif cnn_model == 'resnet101':
-            base_cnn = models.resnet101(pretrained=pretrained)
-        elif cnn_model == 'resnet152':
-            base_cnn = models.resnet152(pretrained=pretrained)
-        else:
+        # Set up the ResNet backbone as a 2D CNN feature extractor. pretrained=True loads the
+        # ImageNet-1k classification weights (IMAGENET1K_V1, what the deprecated pretrained=True
+        # used to load); no video or detection pretraining is involved.
+        if cnn_model not in BACKBONES:
             raise ValueError('The input CNN backbone is not supported, please choose a valid ResNet variant.')
+        builder, weights = BACKBONES[cnn_model]
+        base_cnn = builder(weights=weights if pretrained else None)
 
         # Retrieve the number of features output by the CNN's original fully-connected layer.
         num_features = base_cnn.fc.in_features
