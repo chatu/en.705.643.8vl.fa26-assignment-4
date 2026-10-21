@@ -48,7 +48,9 @@ class VideoDataset(Dataset):
     Args:
         vid_dataset (dict): Dictionary where keys are video directory paths and values are integer labels.
         fr_per_vid (int): Number of frames per video to load (images are taken in order).
-        transforms (callable, optional): A function/transform to apply to each frame image (e.g., resizing, normalization).
+        transforms (callable, optional): A transform applied to the whole clip, a uint8 tensor of
+            shape (T, C, H, W), e.g. the torchvision.transforms.v2 pipelines from
+            utils.compose_data_transforms.
     """
     def __init__(self, vid_dataset, fr_per_vid, transforms=None):
         self.dataset = vid_dataset
@@ -69,7 +71,8 @@ class VideoDataset(Dataset):
             
         Returns:
             tuple: (frames_tensor, label) where frames_tensor is a tensor of shape (T, C, H, W)
-                   with T being the number of frames (up to fr_per_vid) and label is an integer.
+                   with T being the number of frames (up to fr_per_vid), uint8 if no transform
+                   is given, and label is an integer.
         """
         # Get all JPEG frame paths from the video directory, in temporal order (glob returns
         # files in arbitrary order), and select up to fr_per_vid frames
@@ -80,20 +83,21 @@ class VideoDataset(Dataset):
             keep = np.linspace(0, len(fr_paths) - 1, self.fpv).round().astype(int)
             fr_paths = [fr_paths[i] for i in keep]
         
-        # Open images using PIL
-        fr_imgs = [Image.open(fr_path) for fr_path in fr_paths]
-        
         # Get the label associated with the video
         fr_label = self.dataset[idx][1]
-        
-        # Apply transforms to each frame if provided, else keep original images
-        fr_imgs_trans = [self.transforms(fr_img) for fr_img in fr_imgs] if self.transforms else fr_imgs
+        if not fr_paths:
+            return [], fr_label
 
-        # Stack transformed images into a tensor if available
-        if len(fr_imgs_trans) > 0:
-            fr_imgs_trans = torch.stack(fr_imgs_trans)
+        # Stack the frames into one uint8 clip tensor of shape (T, C, H, W)
+        clip = torch.stack([transforms.functional.pil_to_tensor(Image.open(fr_path).convert('RGB'))
+                            for fr_path in fr_paths])
 
-        return fr_imgs_trans, fr_label
+        # Transform the clip as a whole, so random augmentation draws one set of parameters and
+        # applies it to every frame; drawing per frame would make frames of one clip disagree.
+        if self.transforms:
+            clip = self.transforms(clip)
+
+        return clip, fr_label
 
 
 def load_dataset(frame_dir):

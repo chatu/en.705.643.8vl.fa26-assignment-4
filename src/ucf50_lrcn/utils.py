@@ -14,7 +14,8 @@ import os
 import cv2
 import numpy as np
 
-from torchvision import transforms as transforms
+import torch
+from torchvision.transforms import v2 as transforms
 from torch.utils.data import DataLoader
 from ucf50_lrcn.video_datasets import collate_fn_r3d_18, collate_fn_rnn
 
@@ -117,8 +118,9 @@ def compose_data_transforms(height, width, mean, std):
     """
     Compose and return data transforms for training and validation/test datasets.
 
-    The training transforms include data augmentation such as random horizontal flipping and random affine transformations,
-    while the validation/test transforms consist solely of resizing, converting to tensor, and normalizing.
+    Both operate on a whole clip, a uint8 tensor of shape (T, C, H, W). The training transforms
+    add a random horizontal flip and a random translation, drawn once per clip and shared by
+    all its frames; the validation/test transforms only resize, rescale to [0, 1] and normalize.
 
     Args:
         height (int): Desired image height.
@@ -131,16 +133,18 @@ def compose_data_transforms(height, width, mean, std):
             - train_transforms: Composed transforms for the training set.
             - val_test_transforms: Composed transforms for the validation/test set.
     """
+    # torchvision.transforms.v2 transforms a (T, C, H, W) clip tensor as one image batch:
+    # each random transform draws its parameters once and applies them to every frame.
     train_transforms = transforms.Compose([
-        transforms.Resize((height, width)),
+        transforms.Resize((height, width), antialias=True),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-        transforms.ToTensor(),
+        transforms.ToDtype(torch.float32, scale=True),
         transforms.Normalize(mean, std),
     ])
     val_test_transforms = transforms.Compose([
-        transforms.Resize((height, width)),
-        transforms.ToTensor(),
+        transforms.Resize((height, width), antialias=True),
+        transforms.ToDtype(torch.float32, scale=True),
         transforms.Normalize(mean, std),
     ])
     return train_transforms, val_test_transforms

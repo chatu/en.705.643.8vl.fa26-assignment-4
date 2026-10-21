@@ -3,7 +3,6 @@
 import cv2
 import numpy as np
 import pytest
-from torchvision import transforms
 
 from ucf50_lrcn.utils import get_frames, store_frames
 from ucf50_lrcn.video_datasets import VideoDataset
@@ -52,8 +51,7 @@ def _frame_dir(tmp_path, n_frames):
 
 def test_dataset_loads_frames_in_temporal_order(tmp_path):
     """Regression: glob.glob returns files in arbitrary order, scrambling time."""
-    dataset = VideoDataset([(_frame_dir(tmp_path, 12), 0)], fr_per_vid=12,
-                           transforms=transforms.PILToTensor())
+    dataset = VideoDataset([(_frame_dir(tmp_path, 12), 0)], fr_per_vid=12)
     frames, _ = dataset[0]
     numbers = [_frame_number(f.numpy()) for f in frames]
     assert numbers == list(range(12))
@@ -61,8 +59,7 @@ def test_dataset_loads_frames_in_temporal_order(tmp_path):
 
 def test_dataset_samples_frames_across_the_whole_clip(tmp_path):
     """Regression: fr_paths[:fr_per_vid] kept only the start of the clip."""
-    dataset = VideoDataset([(_frame_dir(tmp_path, 32), 0)], fr_per_vid=8,
-                           transforms=transforms.PILToTensor())
+    dataset = VideoDataset([(_frame_dir(tmp_path, 32), 0)], fr_per_vid=8)
     frames, _ = dataset[0]
     numbers = [_frame_number(f.numpy()) for f in frames]
     assert len(numbers) == 8
