@@ -38,9 +38,33 @@ from ucf50_lrcn.models import LRCN
 from ucf50_lrcn.train import train
 from ucf50_lrcn.evaluate import test, get_test_report, get_confusion_matrix
 
-def args_parser():
+def str2bool(value):
+    """
+    Parse a command-line truth value.
+
+    Args:
+        value (str): One of true/false, yes/no, 1/0 (case-insensitive).
+
+    Returns:
+        bool: The parsed value.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not a recognised truth value.
+    """
+    lowered = str(value).strip().lower()
+    if lowered in ('true', 'yes', '1'):
+        return True
+    if lowered in ('false', 'no', '0'):
+        return False
+    raise argparse.ArgumentTypeError(f'expected true or false, got {value!r}')
+
+
+def args_parser(argv=None):
     """
     Parse command-line arguments for configuring the video classification training or evaluation.
+
+    Args:
+        argv (list of str, optional): Arguments to parse; defaults to sys.argv[1:].
 
     Returns:
         argparse.Namespace: Parsed command-line arguments.
@@ -76,7 +100,8 @@ def args_parser():
     parser.add_argument('-c', '--ckpt', help='Path for loading trained model checkpoints')
     parser.add_argument('-mt', '--model_type', help='3D CNN or LRCN', default='lrcn')
     parser.add_argument('-cnn', '--cnn_backbone', default='resnet34', help='2D CNN backbone - options: resnet18, resnet34, resnet50, resnet101, resnet152')
-    parser.add_argument('-p', '--pretrained', help='Use pretrained 2D CNN backbone', default=True)
+    parser.add_argument('-p', '--pretrained', type=str2bool, default=True,
+                        help='Use the ImageNet-pretrained 2D CNN backbone (true/false)')
     parser.add_argument('-rhs', '--rnn_hidden_size', type=int, default=100, help='Number of neurons in the RNN/LSTM hidden layer')
     parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1, help='Number of RNN/LSTM layers')
 
@@ -86,7 +111,7 @@ def args_parser():
     parser.add_argument('-lr', '--learning_rate', type=float, default=3e-5, help='Learning rate for model training')
     parser.add_argument('-ne', '--n_epochs', type=int, default=30, help='Number of training epochs')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args
 
 def main(args):
