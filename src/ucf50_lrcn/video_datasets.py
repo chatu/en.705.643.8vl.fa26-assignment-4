@@ -5,21 +5,20 @@ This module provides classes and functions for loading and processing video data
 splitting them into training, validation, and test sets, and preparing data for video
 classification models. It includes a custom PyTorch Dataset for videos stored as directories
 of frame images, functions to load the dataset from a directory structure, split the dataset
-using stratified sampling, and custom collate functions for handling variable-length video sequences.
+by UCF50 group, and custom collate functions for handling variable-length video sequences.
 """
 
-import torch
-from torch.utils.data import Dataset
-from torchvision import transforms as transforms
-from torch.nn.utils.rnn import pad_sequence
-
-from PIL import Image
-
+import glob
 import os
 import re
-import glob
-from tqdm import tqdm
+
 import numpy as np
+import torch
+from PIL import Image
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset
+from torchvision.transforms.functional import pil_to_tensor
+from tqdm import tqdm
 
 
 def frame_index(frame_path):
@@ -41,12 +40,13 @@ def frame_index(frame_path):
 class VideoDataset(Dataset):
     """
     PyTorch Dataset class for loading video data from directories of frame images.
-    
+
     Each video is represented as a directory containing JPEG images of its frames.
     The dataset is provided as a dictionary mapping each video directory path to its label.
-    
+
     Args:
-        vid_dataset (dict): Dictionary where keys are video directory paths and values are integer labels.
+        vid_dataset (list of tuple): (video_directory_path, integer_label) pairs, as returned by
+            dataset_split.
         fr_per_vid (int): Number of frames per video to load (images are taken in order).
         transforms (callable, optional): A transform applied to the whole clip, a uint8 tensor of
             shape (T, C, H, W), e.g. the torchvision.transforms.v2 pipelines from
@@ -64,8 +64,8 @@ class VideoDataset(Dataset):
     def _load(self, fr_path):
         """Load one image as a uint8 (C, H, W) tensor, unpacking tiled flow channels."""
         if not self.flow_channels:
-            return transforms.functional.pil_to_tensor(Image.open(fr_path).convert('RGB'))
-        tiled = transforms.functional.pil_to_tensor(Image.open(fr_path).convert('L'))
+            return pil_to_tensor(Image.open(fr_path).convert('RGB'))
+        tiled = pil_to_tensor(Image.open(fr_path).convert('L'))
         return tiled.reshape(self.flow_channels, -1, tiled.shape[-1])
 
     def __len__(self):
@@ -76,10 +76,10 @@ class VideoDataset(Dataset):
         """
         Load frames from the video directory corresponding to the given index, apply transforms,
         and return the stacked tensor of frames along with its label.
-        
+
         Args:
             idx (int): Index of the sample.
-            
+
         Returns:
             tuple: (frames_tensor, label) where frames_tensor is a tensor of shape (T, C, H, W)
                    with T being the number of frames (up to fr_per_vid), uint8 if no transform
@@ -93,7 +93,7 @@ class VideoDataset(Dataset):
         if len(fr_paths) > self.fpv:
             keep = np.linspace(0, len(fr_paths) - 1, self.fpv).round().astype(int)
             fr_paths = [fr_paths[i] for i in keep]
-        
+
         # Get the label associated with the video
         fr_label = self.dataset[idx][1]
         if not fr_paths:
@@ -113,14 +113,14 @@ class VideoDataset(Dataset):
 def load_dataset(frame_dir):
     """
     Load the full video dataset from the specified directory.
-    
+
     Each subdirectory in frame_dir is assumed to correspond to a video category.
     The function builds a dictionary where keys are paths to video directories and
     values are integer labels corresponding to each category.
-    
+
     Args:
         frame_dir (str): Path to the directory containing subdirectories for each video category.
-    
+
     Returns:
         tuple: (vid_dataset, label_dict)
             - vid_dataset (dict): Dictionary mapping video directory paths to integer labels.
@@ -191,15 +191,15 @@ def dataset_split(vid_dataset, val_groups, test_groups):
 def collate_fn_r3d_18(batch):
     """
     Collate function for 3D CNN models (e.g., R3D-18).
-    
+
     Assumes each sample in the batch is a tuple (video_frames, label),
     where video_frames is a tensor of shape (T, C, H, W). This function filters out any samples
     with no frames, stacks the video frame tensors, transposes the tensor dimensions as needed,
     and stacks the labels.
-    
+
     Args:
         batch (list): List of samples, each as (video_frames, label).
-    
+
     Returns:
         tuple: (imgs_tensor, labels_tensor)
             - imgs_tensor (Tensor): Stacked video frames tensor with shape adjusted for R3D-18.
@@ -219,15 +219,15 @@ def collate_fn_r3d_18(batch):
 def collate_fn_rnn(batch):
     """
     Collate function for RNN-based models.
-    
+
     Handles variable-length video sequences by padding them to the length of the longest sequence
     in the batch. Each sample in the batch is expected to be a tuple (video_frames, label),
     where video_frames is a tensor of shape (T, C, H, W). The function returns a padded tensor
     of video frames with shape (batch_size, max_T, C, H, W) and a tensor of labels.
-    
+
     Args:
         batch (list): List of samples, each as (video_frames, label).
-    
+
     Returns:
         tuple: (padded_imgs, labels_tensor)
             - padded_imgs (Tensor): Padded tensor of video frames.
@@ -235,18 +235,18 @@ def collate_fn_rnn(batch):
     """
     # Unzip the batch into image tensors and labels
     imgs_batch, label_batch = list(zip(*batch))
-    
+
     # Filter out any samples that have no frames
     valid_samples = [(imgs, label) for imgs, label in zip(imgs_batch, label_batch) if len(imgs) > 0]
     if not valid_samples:
         return None, None
     imgs_batch, label_batch = zip(*valid_samples)
-    
+
     # Pad the video frame tensors along the time dimension (T)
     # Resulting shape: (batch_size, max_T, C, H, W)
     padded_imgs = pad_sequence(imgs_batch, batch_first=True)
-    
+
     # Convert labels to a tensor
     labels_tensor = torch.tensor(label_batch)
-    
+
     return padded_imgs, labels_tensor

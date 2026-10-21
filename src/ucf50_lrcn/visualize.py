@@ -13,13 +13,12 @@ import argparse
 import os
 import random
 
-import matplotlib
+import matplotlib.pyplot as plt
 import torch
 
 from ucf50_lrcn.video_datasets import VideoDataset, dataset_split, load_dataset
 
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt  # pylint: disable=wrong-import-position
+plt.switch_backend('Agg')  # render to files; no display is needed or assumed
 
 
 def save_clip_grid(samples, class_names, fr_per_vid, out_path, predictions=None):

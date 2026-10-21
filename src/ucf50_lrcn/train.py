@@ -20,10 +20,11 @@ from tqdm import tqdm
 import torch
 import wandb
 
-def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_model_wts_dir, n_epochs=30):
+def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_model_wts_dir,
+          n_epochs=30):
     """
     Train and validate the model over a given number of epochs.
-    
+
     This function performs the training loop for a video classification model.
     It iterates through the specified number of epochs, updates model weights
     using backpropagation, and evaluates model performance on a validation set.
@@ -34,7 +35,8 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
         model (torch.nn.Module): The video classification model to be trained.
         criterion (callable): Loss function.
         optimizer (torch.optim.Optimizer): Optimizer for updating model weights.
-        scheduler (torch.optim.lr_scheduler): Learning rate scheduler, which adjusts the learning rate based on validation loss.
+        scheduler (torch.optim.lr_scheduler): Learning rate scheduler, which adjusts the learning
+            rate based on validation loss.
         device (torch.device): Device (CPU or GPU) on which to perform training.
         optim_model_wts_dir (str): Directory to save the best model weights.
         n_epochs (int, optional): Number of training epochs. Default is 30.
@@ -42,8 +44,8 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
     Returns:
         tuple: (model, loss_hist, acc_hist)
             - model (torch.nn.Module): The trained model loaded with the best validation weights.
-            - loss_hist (dict): Dictionary containing lists of training and validation losses for each epoch.
-            - acc_hist (dict): Dictionary containing lists of training and validation accuracies for each epoch.
+            - loss_hist (dict): Lists of training and validation losses, one entry per epoch.
+            - acc_hist (dict): Lists of training and validation accuracies, one entry per epoch.
     """
     loss_hist = {'train': [], 'val': []}
     acc_hist = {'train': [], 'val': []}
@@ -53,11 +55,12 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
 
     for epoch in range(n_epochs):
         current_lr = get_learning_rate(optimizer)
-        print('Epoch {}/{}; Current learning rate {}'.format(epoch+1, n_epochs, current_lr))
+        print(f'Epoch {epoch + 1}/{n_epochs}; Current learning rate {current_lr}')
 
         # Training phase
         model.train()
-        train_loss, train_accuracy = get_epoch_loss(model, criterion, dataloaders['train'], device, optimizer)
+        train_loss, train_accuracy = get_epoch_loss(model, criterion, dataloaders['train'], device,
+                                                    optimizer)
         loss_hist['train'].append(train_loss)
         acc_hist['train'].append(train_accuracy)
 
@@ -71,7 +74,7 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
             best_model_name = 'best_model_wts.pt'
             best_model_path = os.path.join(optim_model_wts_dir, best_model_name)
             torch.save(best_model_wts, best_model_path)
-            print('Best model weights are updated at epoch {}!'.format(epoch+1))
+            print(f'Best model weights are updated at epoch {epoch + 1}!')
         loss_hist['val'].append(val_loss)
         acc_hist['val'].append(val_accuracy)
 
@@ -81,7 +84,8 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
             print('Loading best model weights!')
             model.load_state_dict(best_model_wts)
 
-        print("train loss: {:.6f}, val loss: {:.6f}, accuracy: {:.2f}".format(train_loss, val_loss, 100*val_accuracy))
+        print(f"train loss: {train_loss:.6f}, val loss: {val_loss:.6f}, "
+              f"accuracy: {100 * val_accuracy:.2f}")
         if wandb.run is not None:
             wandb.log({'epoch': epoch + 1, 'lr': current_lr,
                        'train/loss': train_loss, 'train/acc': train_accuracy,
@@ -96,10 +100,10 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
 def get_learning_rate(optimizer):
     """
     Retrieve the current learning rate from the optimizer.
-    
+
     Args:
         optimizer (torch.optim.Optimizer): The optimizer from which to get the learning rate.
-    
+
     Returns:
         float: The current learning rate.
     """
@@ -109,11 +113,11 @@ def get_learning_rate(optimizer):
 def batch_correct_preds(output, target):
     """
     Compute the number of correct predictions for a mini-batch.
-    
+
     Args:
         output (torch.Tensor): Model outputs (logits) with shape (batch_size, num_classes).
         target (torch.Tensor): True labels with shape (batch_size).
-    
+
     Returns:
         int: Number of correct predictions in the mini-batch.
     """
@@ -124,13 +128,14 @@ def batch_correct_preds(output, target):
 def get_batch_loss(criterion, output, target, optimizer=None):
     """
     Compute the loss for a mini-batch and perform backpropagation (if optimizer is provided).
-    
+
     Args:
         criterion (callable): Loss function.
         output (torch.Tensor): Model outputs for the mini-batch.
         target (torch.Tensor): True labels for the mini-batch.
-        optimizer (torch.optim.Optimizer, optional): Optimizer to update model weights. If None, no backpropagation is performed.
-    
+        optimizer (torch.optim.Optimizer, optional): Optimizer to update model weights. If None,
+            no backpropagation is performed.
+
     Returns:
         tuple: (loss_value, n_batch_correct_preds)
             - loss_value (float): Loss value for the mini-batch.
@@ -157,7 +162,8 @@ def get_epoch_loss(model, criterion, dataloader, device, optimizer=None):
         criterion (callable): Loss function.
         dataloader (torch.utils.data.DataLoader): DataLoader for the dataset.
         device (torch.device): Device (CPU or GPU) on which to perform computations.
-        optimizer (torch.optim.Optimizer, optional): If provided, used to update model weights during training.
+        optimizer (torch.optim.Optimizer, optional): If provided, used to update model weights
+            during training.
 
     Returns:
         tuple: (loss, accuracy)

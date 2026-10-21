@@ -2,15 +2,16 @@
 Module: run.py
 
 This module is the main entry point for training or evaluating a video classification model.
-It uses command-line arguments to configure the experiment, including dataset paths, model parameters,
-and training hyperparameters. Depending on the selected mode ('train' or 'eval'), it performs
-the following:
+It uses command-line arguments to configure the experiment, including dataset paths, model
+parameters, and training hyperparameters. Depending on the selected mode ('train' or 'eval'),
+it performs the following:
 
 - Train mode:
     - Loads the dataset from a directory structure.
     - Splits the dataset into training, validation, and test sets.
     - Creates PyTorch Datasets and DataLoaders for training and validation.
-    - Initializes the model (e.g., LRCN) and defines the loss function, optimizer, and learning rate scheduler.
+    - Initializes the LRCN and defines the loss function, optimizer, and learning rate
+      scheduler.
     - Runs the training loop and saves the best model weights.
 
 - Eval mode:
@@ -18,7 +19,7 @@ the following:
     - Creates a DataLoader for the test set.
     - Loads the trained model checkpoint.
     - Evaluates the model on the test set and prints overall test accuracy.
-    
+
 The module also includes a helper function for parsing command-line arguments.
 """
 
@@ -26,9 +27,8 @@ import os
 import argparse
 
 import torch
-import torch.nn as nn
-from torch import optim
-from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
+from torch import nn, optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 import numpy as np
 import wandb
@@ -39,7 +39,7 @@ from ucf50_lrcn.utils import (transform_stats, compose_data_transforms, compose_
 from ucf50_lrcn.flow import FLOW_MEAN, FLOW_STACK, FLOW_STD
 from ucf50_lrcn.models import LRCN
 from ucf50_lrcn.train import train
-from ucf50_lrcn.evaluate import test, get_test_report, get_confusion_matrix
+from ucf50_lrcn.evaluate import test
 
 def str2bool(value):
     """
@@ -71,7 +71,7 @@ def args_parser(argv=None):
 
     Returns:
         argparse.Namespace: Parsed command-line arguments.
-        
+
     Arguments include:
         -fd/--frame_dir: Directory for storing video frames.
         -vg/--val_groups: UCF50 groups held out for validation (default 19 20 21).
@@ -97,26 +97,35 @@ def args_parser(argv=None):
                         help='UCF50 groups held out for validation')
     parser.add_argument('-tg', '--test_groups', type=int, nargs='+', default=[22, 23, 24, 25],
                         help='UCF50 groups held out for testing')
-    parser.add_argument('-fpv', '--fr_per_vid', type=int, default=16, help='Number of frames per video')
-    parser.add_argument('-nc', '--n_classes', type=int, help='Number of classes for the classification task', required=True)
+    parser.add_argument('-fpv', '--fr_per_vid', type=int, default=16,
+                        help='Number of frames per video')
+    parser.add_argument('-nc', '--n_classes', type=int, required=True,
+                        help='Number of classes for the classification task')
 
     parser.add_argument('-c', '--ckpt', help='Path for loading trained model checkpoints')
     parser.add_argument('-mt', '--model_type', choices=['lrcn'], default='lrcn',
                         help='Model architecture (only the LRCN is implemented)')
-    parser.add_argument('-cnn', '--cnn_backbone', default='resnet34', help='2D CNN backbone - options: resnet18, resnet34, resnet50, resnet101, resnet152')
+    parser.add_argument('-cnn', '--cnn_backbone', default='resnet34',
+                        help='2D CNN backbone: resnet18, resnet34, resnet50, resnet101, resnet152')
     parser.add_argument('-p', '--pretrained', type=str2bool, default=True,
                         help='Use the ImageNet-pretrained 2D CNN backbone (true/false)')
-    parser.add_argument('-rhs', '--rnn_hidden_size', type=int, default=100, help='Number of neurons in the RNN/LSTM hidden layer')
+    parser.add_argument('-rhs', '--rnn_hidden_size', type=int, default=100,
+                        help='Number of neurons in the RNN/LSTM hidden layer')
     parser.add_argument('--modality', choices=['rgb', 'flow'], default='rgb',
-                        help='rgb frames, or flow stacks from ucf50_lrcn.flow (frame_dir must match)')
+                        help='rgb frames, or flow stacks from ucf50_lrcn.flow '
+                             '(frame_dir must match)')
     parser.add_argument('-tp', '--temporal_pool', choices=['last', 'mean'], default='last',
                         help="Classify from the last LSTM step, or average every step's logits")
-    parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1, help='Number of RNN/LSTM layers')
+    parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1,
+                        help='Number of RNN/LSTM layers')
 
-    parser.add_argument('-m', '--mode', type=str, default='train', help="Either 'train' or 'eval'", required=True)
+    parser.add_argument('-m', '--mode', type=str, default='train', required=True,
+                        help="Either 'train' or 'eval'")
     parser.add_argument('-bs', '--batch_size', type=int, help='Mini-batch size', required=True)
-    parser.add_argument('-d', '--dropout', type=float, default=0.1, help='Dropout rate for regularization')
-    parser.add_argument('-lr', '--learning_rate', type=float, default=3e-5, help='Learning rate for model training')
+    parser.add_argument('-d', '--dropout', type=float, default=0.1,
+                        help='Dropout rate for regularization')
+    parser.add_argument('-lr', '--learning_rate', type=float, default=3e-5,
+                        help='Learning rate for model training')
     parser.add_argument('-ne', '--n_epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('-nw', '--num_workers', type=int, default=0,
                         help='Worker processes that load clips in parallel with training')
@@ -163,7 +172,7 @@ def evaluate_split(model, dataloader, device):
     """
     targets, outputs, accuracy, loss = test(model, dataloader, device,
                                             nn.CrossEntropyLoss(reduction='sum'))
-    print('The overall test accuracy is {:.4f}% (test loss {:.4f}).'.format(100 * accuracy, loss))
+    print(f'The overall test accuracy is {100 * accuracy:.4f}% (test loss {loss:.4f}).')
     if wandb.run is not None:
         wandb.log({'test/loss': loss, 'test/acc': accuracy})
         wandb.run.summary['test/acc'] = accuracy
@@ -171,125 +180,113 @@ def evaluate_split(model, dataloader, device):
     return targets, outputs, accuracy, loss
 
 
-def main(args):
+def build_transforms(args):
     """
-    Main function to execute training or evaluation based on the parsed command-line arguments.
+    Return the transforms and per-frame channel count for the chosen modality.
 
-    For training:
-        - Loads the dataset from the specified frame directory.
-        - Splits the dataset into training, validation, and test sets.
-        - Saves the splits for later use.
-        - Creates the training and validation DataLoaders.
-        - Initializes the model (LRCN) with specified hyperparameters.
-        - Defines the loss function, optimizer, and learning rate scheduler.
-        - Runs the training loop and saves the best model weights.
-
-    For evaluation:
-        - Loads the saved dataset splits.
-        - Creates the test DataLoader.
-        - Loads the trained model checkpoint.
-        - Evaluates the model on the test set and prints the overall test accuracy.
-    
     Args:
         args (argparse.Namespace): Parsed command-line arguments.
+
+    Returns:
+        tuple: (flow_channels, train_transforms, val_test_transforms); flow_channels is 0 for RGB.
     """
-    # Dataset parameters
-    frame_dir = args.frame_dir
-    val_groups = args.val_groups
-    test_groups = args.test_groups
-    fr_per_vid = args.fr_per_vid
-    n_classes = args.n_classes
+    h, w, mean, std = transform_stats(args.model_type)
+    if args.modality == 'flow':
+        return (2 * FLOW_STACK,) + compose_flow_transforms(h, w, FLOW_MEAN, FLOW_STD)
+    return (0,) + compose_data_transforms(h, w, mean, std)
 
-    # Model parameters
-    model_type = args.model_type
-    rnn_hidden_size = args.rnn_hidden_size
-    rnn_n_layers = args.rnn_n_layers
-    dropout = args.dropout
-    pretrained = args.pretrained
-    cnn_backbone = args.cnn_backbone
-    ckpt = args.ckpt
 
-    # Training parameters
-    mode = args.mode
-    batch_size = args.batch_size
-    num_workers = args.num_workers
-    n_epochs = args.n_epochs
-    learning_rate = args.learning_rate
+def run_train(args, model, transforms, device):
+    """
+    Split by group, train with validation, save the splits, and test the best weights.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments.
+        model (torch.nn.Module): Freshly built model.
+        transforms (tuple): (flow_channels, train_transforms, val_test_transforms).
+        device (torch.device): Training device.
+    """
+    flow_channels, tr_transforms, val_ts_transforms = transforms
+    vid_dataset, _ = load_dataset(args.frame_dir)
+    tr_split, val_split, ts_split = dataset_split(vid_dataset, args.val_groups, args.test_groups)
+
+    # Save the splits for reproducibility and later use in evaluation
+    np.save('./splits.npy', {'train': np.array(tr_split), 'val': np.array(val_split),
+                             'test': np.array(ts_split)})
+
+    dataloaders = train_val_dloaders(
+        VideoDataset(tr_split, args.fr_per_vid, tr_transforms, flow_channels),
+        VideoDataset(val_split, args.fr_per_vid, val_ts_transforms, flow_channels),
+        args.batch_size, args.model_type, args.num_workers)
+    loss_func, opt, lr_scheduler = build_optimization(model, args.learning_rate)
+    os.makedirs('./models', exist_ok=True)
+    model.to(device)
+    model, _, _ = train(dataloaders, model, loss_func, opt, lr_scheduler, device, './models',
+                        args.n_epochs)
+
+    # Evaluate the best weights (train() returns them) on the held-out test groups
+    ts_dataset = VideoDataset(ts_split, args.fr_per_vid, val_ts_transforms, flow_channels)
+    evaluate_split(model, test_dloaders(ts_dataset, args.batch_size, args.model_type,
+                                        args.num_workers)['test'], device)
+
+
+def run_eval(args, model, transforms, device):
+    """
+    Evaluate a saved checkpoint on the test split saved by the training run.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments; args.ckpt is the checkpoint.
+        model (torch.nn.Module): Model with the checkpoint's architecture.
+        transforms (tuple): (flow_channels, train_transforms, val_test_transforms).
+        device (torch.device): Evaluation device.
+    """
+    flow_channels, _, val_ts_transforms = transforms
+    splits = np.load('./splits.npy', allow_pickle=True)
+    ts_split = [(sample[0], int(sample[1])) for sample in splits.item()['test']]
+    ts_dataset = VideoDataset(ts_split, args.fr_per_vid, val_ts_transforms, flow_channels)
+    # map_location: checkpoints saved during GPU training must also load on a CPU-only machine
+    model.load_state_dict(torch.load(args.ckpt, map_location='cpu'))
+    model.to(device)
+    evaluate_split(model, test_dloaders(ts_dataset, args.batch_size, args.model_type,
+                                        args.num_workers)['test'], device)
+
+
+def main(args):
+    """
+    Train or evaluate an LRCN as configured by the command-line arguments.
+
+    Train mode splits the data by group, trains with validation, saves the best weights to
+    ./models and the splits to ./splits.npy, then reports test accuracy of the best weights.
+    Eval mode loads a checkpoint and reports its accuracy on the saved test split.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments.
+
+    Raises:
+        ValueError: If args.mode is neither 'train' nor 'eval'.
+    """
+    if args.mode not in ('train', 'eval'):
+        raise ValueError('The mode argument must be either "train" or "eval".')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
     if args.wandb_project:
         wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))
         wandb.define_metric('epoch')
         for key in ('lr', 'train/loss', 'train/acc', 'val/loss', 'val/acc'):
             wandb.define_metric(key, step_metric='epoch')
 
-    # Load transformation statistics and create data augmentation transforms
-    h, w, mean, std = transform_stats(model_type)
-    flow_channels = 2 * FLOW_STACK if args.modality == 'flow' else 0
-    if flow_channels:
-        tr_transforms, val_ts_transforms = compose_flow_transforms(h, w, FLOW_MEAN, FLOW_STD)
+    transforms = build_transforms(args)
+    model = LRCN(hidden_size=args.rnn_hidden_size, n_layers=args.rnn_n_layers,
+                 dropout_rate=args.dropout, n_classes=args.n_classes,
+                 pretrained=args.pretrained, cnn_model=args.cnn_backbone,
+                 temporal_pool=args.temporal_pool, in_channels=transforms[0] or 3)
+    if args.mode == 'train':
+        run_train(args, model, transforms, device)
     else:
-        tr_transforms, val_ts_transforms = compose_data_transforms(h, w, mean, std)
-
-    # Initialize the model (LRCN)
-    model = LRCN(hidden_size=rnn_hidden_size, n_layers=rnn_n_layers, dropout_rate=dropout,
-                 n_classes=n_classes, pretrained=pretrained, cnn_model=cnn_backbone,
-                 temporal_pool=args.temporal_pool, in_channels=flow_channels or 3)
-
-    if mode == 'train':
-        # Load dataset and split into train/validation/test
-        vid_dataset, label_dict = load_dataset(frame_dir)
-        tr_split, val_split, ts_split = dataset_split(vid_dataset, val_groups, test_groups)
-
-        # Save the splits for reproducibility and later use in evaluation
-        splits = {'train': np.array(tr_split),
-                  'val': np.array(val_split),
-                  'test': np.array(ts_split)}
-        np.save('./splits.npy', splits)
-
-        # Create PyTorch Datasets and DataLoaders for train and validation
-        tr_dataset = VideoDataset(tr_split, fr_per_vid, tr_transforms, flow_channels)
-        val_dataset = VideoDataset(val_split, fr_per_vid, val_ts_transforms, flow_channels)
-        dataloaders = train_val_dloaders(tr_dataset, val_dataset, batch_size, model_type,
-                                         num_workers)
-
-        # Define the loss function, optimizer, and learning rate scheduler
-        loss_func, opt, lr_scheduler = build_optimization(model, learning_rate)
-        os.makedirs("./models", exist_ok=True)
-        optim_model_dir = './models'
-
-        # Main training procedure
-        model.to(device)
-        model, loss_hist, acc_hist = train(dataloaders, model, loss_func, opt, lr_scheduler, device, optim_model_dir, n_epochs)
-
-        # Evaluate the best weights (train() returns them) on the held-out test groups
-        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms, flow_channels)
-        test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
-        evaluate_split(model, test_dl, device)
-
-    elif mode == 'eval':
-        # Load saved dataset splits
-        splits = np.load('./splits.npy', allow_pickle=True)
-        ts_split = splits.item()['test']
-        ts_split = [(sample[0], int(sample[1])) for sample in ts_split]
-
-        # Load the trained model checkpoint and evaluate it on the test split
-        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms, flow_channels)
-        test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
-        # map_location: checkpoints saved during GPU training must also load on a CPU-only machine
-        model.load_state_dict(torch.load(args.ckpt, map_location='cpu'))
-        model.to(device)
-        targets, outputs, accuracy, _ = evaluate_split(model, test_dl, device)
-        # Optionally, generate a detailed test report or confusion matrix:
-        # print(get_test_report(targets, outputs, all_cats))
-        # print(get_confusion_matrix(targets, outputs, labels_dict, all_cats))
-
-    else:
-        raise ValueError('The mode argument must be either "train" or "eval".')
+        run_eval(args, model, transforms, device)
 
     if wandb.run is not None:
         wandb.finish()
 
+
 if __name__ == "__main__":
-    args = args_parser()
-    main(args)
+    main(args_parser())

@@ -1,7 +1,7 @@
 """
 Module: utils.py
 
-This module provides helper functions for video processing and data transformations 
+This module provides helper functions for video processing and data transformations
 for video classification tasks. It includes functions for:
     - Uniformly sampling frames from videos.
     - Storing extracted frames as JPEG images.
@@ -32,7 +32,7 @@ def get_frames(vid, n_frames=1):
         tuple: (frames, v_len)
             - frames (list): List of sampled frames (as numpy arrays in RGB format).
             - v_len (int): Number of frames that decode (not the header's frame count).
-            
+
     Notes:
         - If the video cannot be opened or contains no frames, an empty list and 0 are returned.
         - Frames are sampled at uniformly spaced indices.
@@ -83,7 +83,7 @@ def store_frames(frames, store_path):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         # Zero-padded so that a plain sort of the names is also temporal order
         # (unpadded, frame10.jpg sorted before frame2.jpg).
-        path_to_frame = os.path.join(store_path, "frame{:04d}.jpg".format(idx))
+        path_to_frame = os.path.join(store_path, f'frame{idx:04d}.jpg')
         cv2.imwrite(path_to_frame, frame)
 
 
@@ -270,4 +270,3 @@ def test_dloaders(test_dataset, batch_size, model='lrcn', num_workers=0):
                              num_workers=num_workers)
     dataloaders = {'test': test_dl}
     return dataloaders
-

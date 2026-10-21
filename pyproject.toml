@@ -7,3 +7,16 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.pylint.typecheck]
+# OpenCV's cv2 package loads its compiled module at import time, so pylint cannot see its
+# members and would report every cv2 call as an error.
+generated-members = ["cv2.*"]
+
+[tool.pylint.design]
+# Training and evaluation functions take a model, loaders, optimiser, scheduler, device and
+# a few settings; bundling those into a config object only to satisfy the default of 5 would
+# hide what each function needs.
+max-args = 9
+max-positional-arguments = 9
+max-locals = 20

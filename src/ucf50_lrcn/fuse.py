@@ -60,7 +60,8 @@ def stream_splits(frame_dir, val_groups, test_groups):
     """
     vid_dataset, _ = load_dataset(frame_dir)
     _, val_split, ts_split = dataset_split(vid_dataset, val_groups, test_groups)
-    by_name = lambda split: sorted(split, key=lambda sample: os.path.basename(sample[0]))
+    def by_name(split):
+        return sorted(split, key=lambda sample: os.path.basename(sample[0]))
     return {'val': by_name(val_split), 'test': by_name(ts_split)}
 
 
