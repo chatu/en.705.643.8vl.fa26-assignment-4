@@ -57,3 +57,14 @@ def test_dataset_loads_frames_in_temporal_order(tmp_path):
     frames, _ = dataset[0]
     numbers = [_frame_number(f.numpy()) for f in frames]
     assert numbers == list(range(12))
+
+
+def test_dataset_samples_frames_across_the_whole_clip(tmp_path):
+    """Regression: fr_paths[:fr_per_vid] kept only the start of the clip."""
+    dataset = VideoDataset([(_frame_dir(tmp_path, 32), 0)], fr_per_vid=8,
+                           transforms=transforms.PILToTensor())
+    frames, _ = dataset[0]
+    numbers = [_frame_number(f.numpy()) for f in frames]
+    assert len(numbers) == 8
+    assert numbers[0] == 0
+    assert numbers[-1] == 31

@@ -75,7 +75,11 @@ class VideoDataset(Dataset):
         # Get all JPEG frame paths from the video directory, in temporal order (glob returns
         # files in arbitrary order), and select up to fr_per_vid frames
         fr_paths = sorted(glob.glob(self.dataset[idx][0] + '/*.jpg'), key=frame_index)
-        fr_paths = fr_paths[:self.fpv]
+        # Sample fr_per_vid frames evenly from the first to the last, so the clip covers the
+        # whole action rather than only its opening frames.
+        if len(fr_paths) > self.fpv:
+            keep = np.linspace(0, len(fr_paths) - 1, self.fpv).round().astype(int)
+            fr_paths = [fr_paths[i] for i in keep]
         
         # Open images using PIL
         fr_imgs = [Image.open(fr_path) for fr_path in fr_paths]
