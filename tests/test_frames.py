@@ -65,3 +65,30 @@ def test_dataset_samples_frames_across_the_whole_clip(tmp_path):
     assert len(numbers) == 8
     assert numbers[0] == 0
     assert numbers[-1] == 31
+
+
+def test_get_frames_ignores_an_overstated_header_frame_count(numbered_video, monkeypatch):
+    """Regression: the frame count was read from the container header, which overstates the
+    decodable frames for some UCF50 files (240 claimed, 232 real), so the last sampled frames
+    were never reached and 229 of 6,681 clips came out short."""
+    real_capture = cv2.VideoCapture
+
+    class OverstatingCapture:  # pylint: disable=too-few-public-methods
+        """Wraps a real capture; its header claims 8 more frames than the video holds."""
+
+        def __init__(self, path):
+            self._capture = real_capture(path)
+
+        def get(self, prop):
+            """Report the frame count 8 too high, like the bad UCF50 headers."""
+            value = self._capture.get(prop)
+            return value + 8 if prop == cv2.CAP_PROP_FRAME_COUNT else value
+
+        def __getattr__(self, name):
+            return getattr(self._capture, name)
+
+    monkeypatch.setattr(cv2, "VideoCapture", OverstatingCapture)
+    frames, n_total = get_frames(numbered_video, n_frames=16)
+    assert n_total == N_SOURCE_FRAMES
+    assert len(frames) == 16
+    assert _frame_number(frames[-1]) == N_SOURCE_FRAMES - 1

@@ -31,7 +31,7 @@ def get_frames(vid, n_frames=1):
     Returns:
         tuple: (frames, v_len)
             - frames (list): List of sampled frames (as numpy arrays in RGB format).
-            - v_len (int): Total number of frames in the video.
+            - v_len (int): Number of frames that decode (not the header's frame count).
             
     Notes:
         - If the video cannot be opened or contains no frames, an empty list and 0 are returned.
@@ -42,19 +42,25 @@ def get_frames(vid, n_frames=1):
     if not v_cap.isOpened():
         print("Failed to open video:", vid)
         return frames, 0
-    v_len = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Count the frames that actually decode. CAP_PROP_FRAME_COUNT comes from the container
+    # header, which overstates the real count for some UCF50 files (by up to 8 frames), so
+    # indices computed from it can point past the end and the clip silently loses its ending.
+    v_len = 0
+    while v_cap.grab():
+        v_len += 1
+    v_cap.release()
     if v_len <= 0:
         print("No frames found in video:", vid)
-        v_cap.release()
         return frames, 0
-    frame_idx = np.linspace(0, v_len - 1, n_frames).round().astype(int)
+    frame_idx = set(np.linspace(0, v_len - 1, n_frames).round().astype(int).tolist())
+    v_cap = cv2.VideoCapture(vid)
     for idx in range(v_len):
-        success, frame = v_cap.read()
-        if not success:
-            continue
+        if not v_cap.grab():
+            break
         if idx in frame_idx:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(frame)
+            success, frame = v_cap.retrieve()
+            if success:
+                frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     v_cap.release()
     return frames, v_len
 
