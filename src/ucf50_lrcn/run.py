@@ -31,6 +31,7 @@ from torch import optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 
 import numpy as np
+import wandb
 
 from ucf50_lrcn.video_datasets import VideoDataset, load_dataset, dataset_split
 from ucf50_lrcn.utils import transform_stats, compose_data_transforms, train_val_dloaders, test_dloaders
@@ -111,6 +112,11 @@ def args_parser(argv=None):
     parser.add_argument('-d', '--dropout', type=float, default=0.1, help='Dropout rate for regularization')
     parser.add_argument('-lr', '--learning_rate', type=float, default=3e-5, help='Learning rate for model training')
     parser.add_argument('-ne', '--n_epochs', type=int, default=30, help='Number of training epochs')
+    parser.add_argument('-nw', '--num_workers', type=int, default=0,
+                        help='Worker processes that load clips in parallel with training')
+    parser.add_argument('--wandb_project', default=None,
+                        help='Weights & Biases project to log to; logging is off if unset')
+    parser.add_argument('--wandb_run_name', default=None, help='Weights & Biases run name')
 
     args = parser.parse_args(argv)
     return args
@@ -135,6 +141,28 @@ def build_optimization(model, learning_rate):
     # TypeError before the first epoch. train() already prints the learning rate each epoch.
     lr_scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
     return loss_func, opt, lr_scheduler
+
+
+def evaluate_split(model, dataloader, device):
+    """
+    Evaluate a model on a split, print the result and log it to W&B if a run is active.
+
+    Args:
+        model (torch.nn.Module): Trained model, already on device.
+        dataloader (DataLoader): Loader over the split, here the test split.
+        device (torch.device): Evaluation device.
+
+    Returns:
+        tuple: (targets, outputs, accuracy, loss)
+    """
+    targets, outputs, accuracy, loss = test(model, dataloader, device,
+                                            nn.CrossEntropyLoss(reduction='sum'))
+    print('The overall test accuracy is {:.4f}% (test loss {:.4f}).'.format(100 * accuracy, loss))
+    if wandb.run is not None:
+        wandb.log({'test/loss': loss, 'test/acc': accuracy})
+        wandb.run.summary['test/acc'] = accuracy
+        wandb.run.summary['test/loss'] = loss
+    return targets, outputs, accuracy, loss
 
 
 def main(args):
@@ -178,9 +206,16 @@ def main(args):
     # Training parameters
     mode = args.mode
     batch_size = args.batch_size
+    num_workers = args.num_workers
     n_epochs = args.n_epochs
     learning_rate = args.learning_rate
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    if args.wandb_project:
+        wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))
+        wandb.define_metric('epoch')
+        for key in ('lr', 'train/loss', 'train/acc', 'val/loss', 'val/acc'):
+            wandb.define_metric(key, step_metric='epoch')
 
     # Load transformation statistics and create data augmentation transforms
     h, w, mean, std = transform_stats(model_type)
@@ -204,7 +239,8 @@ def main(args):
         # Create PyTorch Datasets and DataLoaders for train and validation
         tr_dataset = VideoDataset(tr_split, fr_per_vid, tr_transforms)
         val_dataset = VideoDataset(val_split, fr_per_vid, val_ts_transforms)
-        dataloaders = train_val_dloaders(tr_dataset, val_dataset, batch_size, model_type)
+        dataloaders = train_val_dloaders(tr_dataset, val_dataset, batch_size, model_type,
+                                         num_workers)
 
         # Define the loss function, optimizer, and learning rate scheduler
         loss_func, opt, lr_scheduler = build_optimization(model, learning_rate)
@@ -215,28 +251,32 @@ def main(args):
         model.to(device)
         model, loss_hist, acc_hist = train(dataloaders, model, loss_func, opt, lr_scheduler, device, optim_model_dir, n_epochs)
 
+        # Evaluate the best weights (train() returns them) on the held-out test groups
+        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms)
+        test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
+        evaluate_split(model, test_dl, device)
+
     elif mode == 'eval':
         # Load saved dataset splits
         splits = np.load('./splits.npy', allow_pickle=True)
         ts_split = splits.item()['test']
         ts_split = [(sample[0], int(sample[1])) for sample in ts_split]
 
-        # Create PyTorch Dataset and DataLoader for the test set
+        # Load the trained model checkpoint and evaluate it on the test split
         ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms)
-        dataloaders = test_dloaders(ts_dataset, batch_size, model_type)
-
-        # Load the trained model checkpoint
+        test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
         model.load_state_dict(torch.load(args.ckpt))
         model.to(device)
-        targets, outputs, accuracy = test(model, dataloaders['test'], device)
-
-        print('The overall test accuracy is {:.4f}%.'.format(100 * accuracy))
+        targets, outputs, accuracy, _ = evaluate_split(model, test_dl, device)
         # Optionally, generate a detailed test report or confusion matrix:
         # print(get_test_report(targets, outputs, all_cats))
         # print(get_confusion_matrix(targets, outputs, labels_dict, all_cats))
 
     else:
         raise ValueError('The mode argument must be either "train" or "eval".')
+
+    if wandb.run is not None:
+        wandb.finish()
 
 if __name__ == "__main__":
     args = args_parser()

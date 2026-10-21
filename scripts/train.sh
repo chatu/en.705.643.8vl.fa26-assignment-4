@@ -9,4 +9,5 @@ PYTHONPATH=src python -m ucf50_lrcn.run \
     --n_classes 50 \
     --fr_per_vid 16 \
     --batch_size 4 \
-    --mode train
+    --num_workers "${NUM_WORKERS:-0}" \
+    --mode train "$@"

@@ -18,6 +18,7 @@ import os
 import copy
 from tqdm import tqdm
 import torch
+import wandb
 
 def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_model_wts_dir, n_epochs=30):
     """
@@ -81,6 +82,10 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
             model.load_state_dict(best_model_wts)
 
         print("train loss: {:.6f}, val loss: {:.6f}, accuracy: {:.2f}".format(train_loss, val_loss, 100*val_accuracy))
+        if wandb.run is not None:
+            wandb.log({'epoch': epoch + 1, 'lr': current_lr,
+                       'train/loss': train_loss, 'train/acc': train_accuracy,
+                       'val/loss': val_loss, 'val/acc': val_accuracy})
         print("-" * 60)
         print()
 
@@ -169,6 +174,10 @@ def get_epoch_loss(model, criterion, dataloader, device, optimizer=None):
 
         running_loss += batch_loss
         running_total_correct_preds += n_batch_correct_preds
+        if optimizer and wandb.run is not None:
+            # batch_loss is summed over the batch (reduction='sum'); log the per-video mean.
+            wandb.log({'train/batch_loss': batch_loss / len(y_batch),
+                       'train/batch_acc': n_batch_correct_preds / len(y_batch)})
 
     loss = running_loss / float(len_dataset)
     accuracy = running_total_correct_preds / float(len_dataset)

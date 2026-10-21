@@ -16,7 +16,7 @@ import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report, multilabel_confusion_matrix
 
-def test(model, dataloader, device):
+def test(model, dataloader, device, criterion=None):
     """
     Evaluate the model on the test dataset and compute overall accuracy.
     
@@ -28,9 +28,11 @@ def test(model, dataloader, device):
         model (torch.nn.Module): The trained video classification model.
         dataloader (torch.utils.data.DataLoader): DataLoader containing the test dataset.
         device (torch.device): The device (CPU or GPU) on which to perform evaluation.
+        criterion (callable, optional): Loss summed over a batch; if given, the mean test loss
+            per video is returned as well.
     
     Returns:
-        tuple: (targets, outputs, accuracy)
+        tuple: (targets, outputs, accuracy, loss), loss being None without a criterion
             - targets (list): Ground truth labels for all samples.
             - outputs (list): Predicted labels for all samples.
             - accuracy (float): Overall accuracy computed as the ratio of correct predictions
@@ -38,12 +40,14 @@ def test(model, dataloader, device):
     """
     model.eval()
     with torch.no_grad():
-        total_correct_preds = 0.0
+        total_correct_preds, total_loss = 0.0, 0.0
         len_dataset = len(dataloader.dataset)
         targets, outputs = [], []
         for x_batch, y_batch in tqdm(dataloader):
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             output = model(x_batch)
+            if criterion is not None:
+                total_loss += criterion(output, y_batch).item()
             pred = output.argmax(dim=1, keepdim=True)
             correct_preds = pred.eq(y_batch.view_as(pred)).sum().item()
             total_correct_preds += correct_preds
@@ -51,8 +55,9 @@ def test(model, dataloader, device):
             targets.extend(y_batch.detach().cpu().numpy().tolist())
         
         accuracy = total_correct_preds / float(len_dataset)
+        loss = total_loss / float(len_dataset) if criterion is not None else None
     
-    return targets, outputs, accuracy
+    return targets, outputs, accuracy, loss
 
 def get_test_report(target, output, target_names):
     """

@@ -156,7 +156,7 @@ def compose_data_transforms(height, width, mean, std):
     return train_transforms, val_test_transforms
 
 
-def train_val_dloaders(train_dataset, val_dataset, batch_size, model='lrcn'):
+def train_val_dloaders(train_dataset, val_dataset, batch_size, model='lrcn', num_workers=0):
     """
     Create DataLoaders for training and validation datasets.
 
@@ -169,25 +169,30 @@ def train_val_dloaders(train_dataset, val_dataset, batch_size, model='lrcn'):
         val_dataset (Dataset): PyTorch Dataset for validation data.
         batch_size (int): Number of samples per batch.
         model (str): Model type; 'lrcn' for RNN-based models, otherwise for 3D CNNs.
+        num_workers (int): Worker processes that load clips in parallel with training.
 
     Returns:
         dict: Dictionary with keys 'train' and 'val' mapping to their respective DataLoaders.
     """
     if model == "lrcn":
         train_dl = DataLoader(train_dataset, batch_size=batch_size,
-                              shuffle=True, collate_fn=collate_fn_rnn)
+                              shuffle=True, collate_fn=collate_fn_rnn,
+                             num_workers=num_workers)
         val_dl = DataLoader(val_dataset, batch_size=2 * batch_size,
-                            shuffle=False, collate_fn=collate_fn_rnn)
+                            shuffle=False, collate_fn=collate_fn_rnn,
+                             num_workers=num_workers)
     else:
         train_dl = DataLoader(train_dataset, batch_size=batch_size,
-                              shuffle=True, collate_fn=collate_fn_r3d_18)
+                              shuffle=True, collate_fn=collate_fn_r3d_18,
+                             num_workers=num_workers)
         val_dl = DataLoader(val_dataset, batch_size=2 * batch_size,
-                            shuffle=False, collate_fn=collate_fn_r3d_18)
+                            shuffle=False, collate_fn=collate_fn_r3d_18,
+                             num_workers=num_workers)
     dataloaders = {'train': train_dl, 'val': val_dl}
     return dataloaders
 
 
-def test_dloaders(test_dataset, batch_size, model='lrcn'):
+def test_dloaders(test_dataset, batch_size, model='lrcn', num_workers=0):
     """
     Create a DataLoader for the test dataset.
 
@@ -198,16 +203,19 @@ def test_dloaders(test_dataset, batch_size, model='lrcn'):
         test_dataset (Dataset): PyTorch Dataset for test data.
         batch_size (int): Number of samples per batch.
         model (str): Model type; 'lrcn' for RNN-based models, otherwise for 3D CNNs.
+        num_workers (int): Worker processes that load clips in parallel with training.
 
     Returns:
         dict: Dictionary with key 'test' mapping to the test DataLoader.
     """
     if model == "lrcn":
         test_dl = DataLoader(test_dataset, batch_size=2 * batch_size,
-                             shuffle=False, collate_fn=collate_fn_rnn)
+                             shuffle=False, collate_fn=collate_fn_rnn,
+                             num_workers=num_workers)
     else:
         test_dl = DataLoader(test_dataset, batch_size=2 * batch_size,
-                             shuffle=False, collate_fn=collate_fn_r3d_18)
+                             shuffle=False, collate_fn=collate_fn_r3d_18,
+                             num_workers=num_workers)
     dataloaders = {'test': test_dl}
     return dataloaders
 
