@@ -88,8 +88,10 @@ class LRCN(nn.Module):
         base_cnn.fc = Identity()
         self.base_model = base_cnn
 
-        # Define the LSTM to process the sequence of frame features.
-        self.rnn = nn.LSTM(num_features, hidden_size, n_layers)
+        # Define the LSTM to process the sequence of frame features. Inputs arrive as
+        # (batch, time, features), so batch_first must be set; without it the LSTM runs
+        # along the batch dimension and mixes unrelated videos.
+        self.rnn = nn.LSTM(num_features, hidden_size, n_layers, batch_first=True)
         
         # Define dropout for regularization.
         self.dropout = nn.Dropout(dropout_rate)
