@@ -16,10 +16,27 @@ from torch.nn.utils.rnn import pad_sequence
 from PIL import Image
 
 import os
+import re
 import glob
 from tqdm import tqdm
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
+
+
+def frame_index(frame_path):
+    """
+    Return the frame number encoded in a frame file name such as frame0012.jpg.
+
+    Sorting on this number, rather than on the name as text, keeps temporal order for both
+    zero-padded and unpadded names.
+
+    Args:
+        frame_path (str): Path to a frame image.
+
+    Returns:
+        int: The frame number.
+    """
+    return int(re.search(r'(\d+)\.jpg$', frame_path).group(1))
 
 
 class VideoDataset(Dataset):
@@ -55,8 +72,9 @@ class VideoDataset(Dataset):
             tuple: (frames_tensor, label) where frames_tensor is a tensor of shape (T, C, H, W)
                    with T being the number of frames (up to fr_per_vid) and label is an integer.
         """
-        # Get all JPEG frame paths from the video directory and select up to fr_per_vid frames
-        fr_paths = glob.glob(self.dataset[idx][0] + '/*.jpg')
+        # Get all JPEG frame paths from the video directory, in temporal order (glob returns
+        # files in arbitrary order), and select up to fr_per_vid frames
+        fr_paths = sorted(glob.glob(self.dataset[idx][0] + '/*.jpg'), key=frame_index)
         fr_paths = fr_paths[:self.fpv]
         
         # Open images using PIL

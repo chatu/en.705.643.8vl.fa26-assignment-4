@@ -73,9 +73,10 @@ def store_frames(frames, store_path):
         None
     """
     for idx, frame in enumerate(frames):
-        print("processing")
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        path_to_frame = os.path.join(store_path, "frame{}.jpg".format(idx))
+        # Zero-padded so that a plain sort of the names is also temporal order
+        # (unpadded, frame10.jpg sorted before frame2.jpg).
+        path_to_frame = os.path.join(store_path, "frame{:04d}.jpg".format(idx))
         cv2.imwrite(path_to_frame, frame)
 
 
