@@ -76,7 +76,7 @@ def args_parser(argv=None):
         -fpv/--fr_per_vid: Number of frames per video to consider (default 16).
         -nc/--n_classes: Number of classes for the classification task (required).
         -c/--ckpt: Path for loading a trained model checkpoint.
-        -mt/--model_type: Model type, either '3dcnn' or 'lrcn' (default 'lrcn').
+        -mt/--model_type: Model type; only 'lrcn' is implemented (default 'lrcn').
         -cnn/--cnn_backbone: Backbone CNN for 2D feature extraction (default 'resnet34').
         -p/--pretrained: Whether to use a pretrained CNN backbone (default True).
         -rhs/--rnn_hidden_size: Number of neurons in the RNN/LSTM hidden layer (default 100).
@@ -98,7 +98,8 @@ def args_parser(argv=None):
     parser.add_argument('-nc', '--n_classes', type=int, help='Number of classes for the classification task', required=True)
 
     parser.add_argument('-c', '--ckpt', help='Path for loading trained model checkpoints')
-    parser.add_argument('-mt', '--model_type', help='3D CNN or LRCN', default='lrcn')
+    parser.add_argument('-mt', '--model_type', choices=['lrcn'], default='lrcn',
+                        help='Model architecture (only the LRCN is implemented)')
     parser.add_argument('-cnn', '--cnn_backbone', default='resnet34', help='2D CNN backbone - options: resnet18, resnet34, resnet50, resnet101, resnet152')
     parser.add_argument('-p', '--pretrained', type=str2bool, default=True,
                         help='Use the ImageNet-pretrained 2D CNN backbone (true/false)')
