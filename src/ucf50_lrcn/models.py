@@ -76,8 +76,7 @@ class LRCN(nn.Module):
         elif cnn_model == 'resnet101':
             base_cnn = models.resnet101(pretrained=pretrained)
         elif cnn_model == 'resnet152':
-            # Note: This example uses resnet34 for resnet152 option as a placeholder.
-            base_cnn = models.resnet34(pretrained=pretrained)
+            base_cnn = models.resnet152(pretrained=pretrained)
         else:
             raise ValueError('The input CNN backbone is not supported, please choose a valid ResNet variant.')
 

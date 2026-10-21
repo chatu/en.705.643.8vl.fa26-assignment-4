@@ -33,3 +33,12 @@ def test_prediction_does_not_depend_on_other_videos_in_the_batch(model):
     with torch.no_grad():
         before, after = model(videos), model(altered)
     torch.testing.assert_close(after[1:], before[1:])
+
+
+def test_resnet152_backbone_is_a_resnet152():
+    """Regression: asking for resnet152 silently built a resnet34."""
+    model = LRCN(hidden_size=8, n_layers=1, dropout_rate=0.0, n_classes=N_CLASSES,
+                 pretrained=False, cnn_model="resnet152")
+    assert model.rnn.input_size == 2048
+    n_blocks = sum(len(getattr(model.base_model, f"layer{i}")) for i in range(1, 5))
+    assert n_blocks == 50  # a resnet34 has 16
