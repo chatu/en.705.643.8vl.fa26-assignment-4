@@ -43,10 +43,10 @@ import torch.nn as nn
 from torch import optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 
-from video_datasets import VideoDataset, load_dataset, dataset_split
-from utils import transform_stats, compose_data_transforms, compose_dataloaders
-from models import LRCN
-from train import train
+from ucf50_lrcn.video_datasets import VideoDataset, load_dataset, dataset_split
+from ucf50_lrcn.utils import transform_stats, compose_data_transforms, compose_dataloaders
+from ucf50_lrcn.models import LRCN
+from ucf50_lrcn.train import train
 
 def args_parser():
     """

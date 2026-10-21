@@ -1,5 +1,5 @@
 #!/bin/bash
-python run.py \
+PYTHONPATH=src python -m ucf50_lrcn.run \
     --ckpt /home/vince/HMDB_Vid_Classification/models/epoch4_model_wts.pt \
     --model_type lrcn \
     --n_classes 51 \

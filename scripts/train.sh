@@ -1,5 +1,5 @@
 #!/bin/bash
-python run.py \
+PYTHONPATH=src python -m ucf50_lrcn.run \
     --frame_dir HMDB51 \
     --train_size 0.75 \
     --test_size 0.15 \

@@ -1,5 +1,5 @@
 """
-Module: test.py
+Module: evaluate.py
 
 This module provides functions for evaluating a video classification model on test data.
 It includes functions to compute predictions and accuracy, generate a detailed classification report,

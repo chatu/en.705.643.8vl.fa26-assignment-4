@@ -1,0 +1,9 @@
+[project]
+name = "ucf50-lrcn"
+version = "0.1.0"
+description = "LRCN video action recognition on UCF50"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
