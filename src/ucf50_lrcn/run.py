@@ -47,8 +47,8 @@ def args_parser():
         
     Arguments include:
         -fd/--frame_dir: Directory for storing video frames.
-        -trs/--train_size: Proportion of data to use for training (default 0.7).
-        -tss/--test_size: Proportion of data to use for testing (default 0.1).
+        -vg/--val_groups: UCF50 groups held out for validation (default 19 20 21).
+        -tg/--test_groups: UCF50 groups held out for testing (default 22 23 24 25).
         -fpv/--fr_per_vid: Number of frames per video to consider (default 16).
         -nc/--n_classes: Number of classes for the classification task (required).
         -c/--ckpt: Path for loading a trained model checkpoint.
@@ -66,8 +66,10 @@ def args_parser():
     parser = argparse.ArgumentParser(description='Video Classification Training')
 
     parser.add_argument('-fd', '--frame_dir', help='Directory for storing video frames')
-    parser.add_argument('-trs', '--train_size', type=float, default=0.7, help='Train set size')
-    parser.add_argument('-tss', '--test_size', type=float, default=0.1, help='Test set size')
+    parser.add_argument('-vg', '--val_groups', type=int, nargs='+', default=[19, 20, 21],
+                        help='UCF50 groups held out for validation')
+    parser.add_argument('-tg', '--test_groups', type=int, nargs='+', default=[22, 23, 24, 25],
+                        help='UCF50 groups held out for testing')
     parser.add_argument('-fpv', '--fr_per_vid', type=int, default=16, help='Number of frames per video')
     parser.add_argument('-nc', '--n_classes', type=int, help='Number of classes for the classification task', required=True)
 
@@ -111,8 +113,8 @@ def main(args):
     """
     # Dataset parameters
     frame_dir = args.frame_dir
-    tr_size = args.train_size
-    ts_size = args.test_size
+    val_groups = args.val_groups
+    test_groups = args.test_groups
     fr_per_vid = args.fr_per_vid
     n_classes = args.n_classes
 
@@ -143,7 +145,7 @@ def main(args):
     if mode == 'train':
         # Load dataset and split into train/validation/test
         vid_dataset, label_dict = load_dataset(frame_dir)
-        tr_split, val_split, ts_split = dataset_split(vid_dataset, tr_size, ts_size)
+        tr_split, val_split, ts_split = dataset_split(vid_dataset, val_groups, test_groups)
 
         # Save the splits for reproducibility and later use in evaluation
         splits = {'train': np.array(tr_split),

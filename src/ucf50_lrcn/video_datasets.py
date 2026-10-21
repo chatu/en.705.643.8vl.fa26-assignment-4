@@ -20,7 +20,6 @@ import re
 import glob
 from tqdm import tqdm
 import numpy as np
-from sklearn.model_selection import StratifiedShuffleSplit
 
 
 def frame_index(frame_path):
@@ -124,46 +123,54 @@ def load_dataset(frame_dir):
     return vid_dataset, label_dict
 
 
-def dataset_split(vid_dataset, tr_ratio, ts_ratio, seed=0):
+def video_group(vid_path):
     """
-    Split the dataset into training, validation, and test sets using stratified sampling.
-    
-    This function uses StratifiedShuffleSplit to ensure that each split has a representative
-    distribution of classes.
-    
+    Return the UCF50 group number encoded in a video path such as .../v_Biking_g07_c03.
+
+    Clips that share a group share the same actor, background and viewpoint.
+
+    Args:
+        vid_path (str): Path to a video file or to its directory of frames.
+
+    Returns:
+        int: The group number.
+    """
+    return int(re.search(r'_g(\d+)_', os.path.basename(vid_path)).group(1))
+
+
+def dataset_split(vid_dataset, val_groups, test_groups):
+    """
+    Split the dataset into training, validation, and test sets by UCF50 group.
+
+    Clips in the same group show the same person in the same scene, so a split by clip puts
+    near-duplicates on both sides and leaks them into evaluation. Here every group sits in
+    exactly one split: validation and test take the groups listed, training takes the rest.
+
     Args:
         vid_dataset (dict): Dictionary mapping video paths to labels.
-        tr_ratio (float): Proportion of the data to use for training.
-        ts_ratio (float): Proportion of the data to use for testing.
-        seed (int, optional): Random seed for reproducibility. Default is 0.
-    
+        val_groups (iterable of int): Group numbers held out for validation.
+        test_groups (iterable of int): Group numbers held out for testing.
+
     Returns:
-        tuple: (tr_dataset, val_dataset, ts_dataset)
-            - tr_dataset (list): List of (video_path, label) tuples for the training set.
-            - val_dataset (list): List of (video_path, label) tuples for the validation set.
-            - ts_dataset (list): List of (video_path, label) tuples for the test set.
+        tuple: (tr_dataset, val_dataset, ts_dataset), each a list of (video_path, label)
+        tuples sorted by path.
+
+    Raises:
+        ValueError: If a group is assigned to both validation and test.
     """
-    vid_paths = np.array([vid_path for vid_path in vid_dataset.keys()])
-    vid_labels = np.array([vid_label for vid_label in vid_dataset.values()])
-    print('Splitting train/validation/test datasets....')
-
-    # Test split using StratifiedShuffleSplit
-    ts_spliter = StratifiedShuffleSplit(n_splits=1, test_size=ts_ratio, random_state=seed)
-    for tr_val_idx, ts_idx in ts_spliter.split(vid_paths, vid_labels):
-        ts_paths, ts_labels = vid_paths[ts_idx], vid_labels[ts_idx]
-        tr_val_paths, tr_val_labels = vid_paths[tr_val_idx], vid_labels[tr_val_idx]
-    ts_dataset = [(ts_path, ts_label) for ts_path, ts_label in zip(ts_paths, ts_labels)]
-
-    # Train/validation split
-    val_ratio = 1 - tr_ratio - ts_ratio
-    val_wt = val_ratio / (tr_ratio + val_ratio)
-    val_spliter = StratifiedShuffleSplit(n_splits=1, test_size=val_wt, random_state=seed)
-    for tr_idx, val_idx in val_spliter.split(tr_val_paths, tr_val_labels):
-        tr_paths, tr_labels = tr_val_paths[tr_idx], tr_val_labels[tr_idx]
-        val_paths, val_labels = tr_val_paths[val_idx], tr_val_labels[val_idx]
-    tr_dataset = [(tr_path, tr_label) for tr_path, tr_label in zip(tr_paths, tr_labels)]
-    val_dataset = [(val_path, val_label) for val_path, val_label in zip(val_paths, val_labels)]
-
+    val_groups, test_groups = set(val_groups), set(test_groups)
+    if val_groups & test_groups:
+        raise ValueError(f'groups {sorted(val_groups & test_groups)} are in both val and test')
+    print('Splitting train/validation/test datasets by group....')
+    tr_dataset, val_dataset, ts_dataset = [], [], []
+    for vid_path, label in sorted(vid_dataset.items()):
+        group = video_group(vid_path)
+        if group in test_groups:
+            ts_dataset.append((vid_path, label))
+        elif group in val_groups:
+            val_dataset.append((vid_path, label))
+        else:
+            tr_dataset.append((vid_path, label))
     return tr_dataset, val_dataset, ts_dataset
 
 
