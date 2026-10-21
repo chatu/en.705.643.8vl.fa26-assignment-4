@@ -114,6 +114,28 @@ def args_parser(argv=None):
     args = parser.parse_args(argv)
     return args
 
+def build_optimization(model, learning_rate):
+    """
+    Create the loss function, optimizer and learning rate scheduler for training.
+
+    The loss sums over the batch; train.get_epoch_loss divides the epoch total by the number
+    of videos, so the reported loss is the mean per video.
+
+    Args:
+        model (torch.nn.Module): The model whose parameters will be optimized.
+        learning_rate (float): Initial learning rate.
+
+    Returns:
+        tuple: (loss_func, optimizer, scheduler)
+    """
+    loss_func = nn.CrossEntropyLoss(reduction='sum')
+    opt = optim.Adam(model.parameters(), lr=learning_rate)
+    # ReduceLROnPlateau no longer accepts verbose= (removed from PyTorch); passing it raised a
+    # TypeError before the first epoch. train() already prints the learning rate each epoch.
+    lr_scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
+    return loss_func, opt, lr_scheduler
+
+
 def main(args):
     """
     Main function to execute training or evaluation based on the parsed command-line arguments.
@@ -184,9 +206,7 @@ def main(args):
         dataloaders = train_val_dloaders(tr_dataset, val_dataset, batch_size, model_type)
 
         # Define the loss function, optimizer, and learning rate scheduler
-        loss_func = nn.CrossEntropyLoss(reduction='sum')
-        opt = optim.Adam(model.parameters(), lr=learning_rate)
-        lr_scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5, verbose=1)
+        loss_func, opt, lr_scheduler = build_optimization(model, learning_rate)
         os.makedirs("./models", exist_ok=True)
         optim_model_dir = './models'
 
