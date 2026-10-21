@@ -156,6 +156,58 @@ def compose_data_transforms(height, width, mean, std):
     return train_transforms, val_test_transforms
 
 
+class RandomFlowFlip(torch.nn.Module):
+    """
+    Horizontally flip a uint8 flow clip of shape (T, C, H, W) with probability p.
+
+    Mirroring the image reverses horizontal motion, so the x channels (even indices, from
+    ucf50_lrcn.flow) are also reflected about zero motion, v -> 255 - v. A plain image flip
+    would leave every horizontal motion pointing the wrong way.
+
+    Args:
+        p (float): Probability of flipping.
+    """
+    def __init__(self, p=0.5):
+        super().__init__()
+        self.p = p
+
+    def forward(self, clip):
+        """Flip the whole clip, or return it unchanged."""
+        if torch.rand(1).item() >= self.p:
+            return clip
+        clip = clip.flip(-1)
+        clip[:, 0::2] = 255 - clip[:, 0::2]
+        return clip
+
+
+def compose_flow_transforms(height, width, mean, std):
+    """
+    Compose and return data transforms for flow clips, the counterpart of compose_data_transforms.
+
+    Args:
+        height (int): Desired image height.
+        width (int): Desired image width.
+        mean (list): Mean per flow channel, on the 0..1 scale.
+        std (list): Standard deviation per flow channel, on the 0..1 scale.
+
+    Returns:
+        tuple: (train_transforms, val_test_transforms)
+    """
+    train_transforms = transforms.Compose([
+        transforms.Resize((height, width), antialias=True),
+        RandomFlowFlip(p=0.5),
+        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), fill=128),
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Normalize(mean, std),
+    ])
+    val_test_transforms = transforms.Compose([
+        transforms.Resize((height, width), antialias=True),
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Normalize(mean, std),
+    ])
+    return train_transforms, val_test_transforms
+
+
 def train_val_dloaders(train_dataset, val_dataset, batch_size, model='lrcn', num_workers=0):
     """
     Create DataLoaders for training and validation datasets.

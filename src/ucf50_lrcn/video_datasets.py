@@ -51,11 +51,22 @@ class VideoDataset(Dataset):
         transforms (callable, optional): A transform applied to the whole clip, a uint8 tensor of
             shape (T, C, H, W), e.g. the torchvision.transforms.v2 pipelines from
             utils.compose_data_transforms.
+        flow_channels (int, optional): 0 for RGB frames. Otherwise the images are flow stacks
+            from ucf50_lrcn.flow, grayscale with flow_channels channels tiled vertically, and
+            each is unpacked to (flow_channels, H, W).
     """
-    def __init__(self, vid_dataset, fr_per_vid, transforms=None):
+    def __init__(self, vid_dataset, fr_per_vid, transforms=None, flow_channels=0):
         self.dataset = vid_dataset
         self.fpv = fr_per_vid
         self.transforms = transforms
+        self.flow_channels = flow_channels
+
+    def _load(self, fr_path):
+        """Load one image as a uint8 (C, H, W) tensor, unpacking tiled flow channels."""
+        if not self.flow_channels:
+            return transforms.functional.pil_to_tensor(Image.open(fr_path).convert('RGB'))
+        tiled = transforms.functional.pil_to_tensor(Image.open(fr_path).convert('L'))
+        return tiled.reshape(self.flow_channels, -1, tiled.shape[-1])
 
     def __len__(self):
         """Return the number of video samples in the dataset."""
@@ -89,8 +100,7 @@ class VideoDataset(Dataset):
             return [], fr_label
 
         # Stack the frames into one uint8 clip tensor of shape (T, C, H, W)
-        clip = torch.stack([transforms.functional.pil_to_tensor(Image.open(fr_path).convert('RGB'))
-                            for fr_path in fr_paths])
+        clip = torch.stack([self._load(fr_path) for fr_path in fr_paths])
 
         # Transform the clip as a whole, so random augmentation draws one set of parameters and
         # applies it to every frame; drawing per frame would make frames of one clip disagree.

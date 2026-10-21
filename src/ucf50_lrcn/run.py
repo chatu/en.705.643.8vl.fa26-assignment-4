@@ -34,7 +34,9 @@ import numpy as np
 import wandb
 
 from ucf50_lrcn.video_datasets import VideoDataset, load_dataset, dataset_split
-from ucf50_lrcn.utils import transform_stats, compose_data_transforms, train_val_dloaders, test_dloaders
+from ucf50_lrcn.utils import (transform_stats, compose_data_transforms, compose_flow_transforms,
+                              train_val_dloaders, test_dloaders)
+from ucf50_lrcn.flow import FLOW_MEAN, FLOW_STACK, FLOW_STD
 from ucf50_lrcn.models import LRCN
 from ucf50_lrcn.train import train
 from ucf50_lrcn.evaluate import test, get_test_report, get_confusion_matrix
@@ -105,6 +107,8 @@ def args_parser(argv=None):
     parser.add_argument('-p', '--pretrained', type=str2bool, default=True,
                         help='Use the ImageNet-pretrained 2D CNN backbone (true/false)')
     parser.add_argument('-rhs', '--rnn_hidden_size', type=int, default=100, help='Number of neurons in the RNN/LSTM hidden layer')
+    parser.add_argument('--modality', choices=['rgb', 'flow'], default='rgb',
+                        help='rgb frames, or flow stacks from ucf50_lrcn.flow (frame_dir must match)')
     parser.add_argument('-tp', '--temporal_pool', choices=['last', 'mean'], default='last',
                         help="Classify from the last LSTM step, or average every step's logits")
     parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1, help='Number of RNN/LSTM layers')
@@ -221,12 +225,16 @@ def main(args):
 
     # Load transformation statistics and create data augmentation transforms
     h, w, mean, std = transform_stats(model_type)
-    tr_transforms, val_ts_transforms = compose_data_transforms(h, w, mean, std)
+    flow_channels = 2 * FLOW_STACK if args.modality == 'flow' else 0
+    if flow_channels:
+        tr_transforms, val_ts_transforms = compose_flow_transforms(h, w, FLOW_MEAN, FLOW_STD)
+    else:
+        tr_transforms, val_ts_transforms = compose_data_transforms(h, w, mean, std)
 
     # Initialize the model (LRCN)
     model = LRCN(hidden_size=rnn_hidden_size, n_layers=rnn_n_layers, dropout_rate=dropout,
                  n_classes=n_classes, pretrained=pretrained, cnn_model=cnn_backbone,
-                 temporal_pool=args.temporal_pool)
+                 temporal_pool=args.temporal_pool, in_channels=flow_channels or 3)
 
     if mode == 'train':
         # Load dataset and split into train/validation/test
@@ -240,8 +248,8 @@ def main(args):
         np.save('./splits.npy', splits)
 
         # Create PyTorch Datasets and DataLoaders for train and validation
-        tr_dataset = VideoDataset(tr_split, fr_per_vid, tr_transforms)
-        val_dataset = VideoDataset(val_split, fr_per_vid, val_ts_transforms)
+        tr_dataset = VideoDataset(tr_split, fr_per_vid, tr_transforms, flow_channels)
+        val_dataset = VideoDataset(val_split, fr_per_vid, val_ts_transforms, flow_channels)
         dataloaders = train_val_dloaders(tr_dataset, val_dataset, batch_size, model_type,
                                          num_workers)
 
@@ -255,7 +263,7 @@ def main(args):
         model, loss_hist, acc_hist = train(dataloaders, model, loss_func, opt, lr_scheduler, device, optim_model_dir, n_epochs)
 
         # Evaluate the best weights (train() returns them) on the held-out test groups
-        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms)
+        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms, flow_channels)
         test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
         evaluate_split(model, test_dl, device)
 
@@ -266,7 +274,7 @@ def main(args):
         ts_split = [(sample[0], int(sample[1])) for sample in ts_split]
 
         # Load the trained model checkpoint and evaluate it on the test split
-        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms)
+        ts_dataset = VideoDataset(ts_split, fr_per_vid, val_ts_transforms, flow_channels)
         test_dl = test_dloaders(ts_dataset, batch_size, model_type, num_workers)['test']
         model.load_state_dict(torch.load(args.ckpt))
         model.to(device)

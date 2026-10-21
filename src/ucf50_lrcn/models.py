@@ -13,6 +13,7 @@ Classes:
           fully-connected layer to produce class logits.
 """
 
+import torch
 import torch.nn as nn
 from torchvision import models
 
@@ -68,6 +69,8 @@ class LRCN(nn.Module):
         cnn_model (str, optional): Specifies the ResNet variant to use as the backbone.
                                    Options: 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'.
                                    Default is 'resnet34'.
+        in_channels (int, optional): Input channels per frame; 3 for RGB, 2 * FLOW_STACK for
+                                     stacked flow. Default is 3.
         temporal_pool (str, optional): 'last' classifies from the final LSTM step; 'mean'
                                        classifies every step and averages the logits over time,
                                        as in the original LRCN. Default is 'last'.
@@ -76,7 +79,7 @@ class LRCN(nn.Module):
         ValueError: If the specified cnn_model or temporal_pool is not supported.
     """
     def __init__(self, hidden_size, n_layers, dropout_rate, n_classes, pretrained=True,
-                 cnn_model='resnet34', temporal_pool='last'):
+                 cnn_model='resnet34', temporal_pool='last', in_channels=3):
         super(LRCN, self).__init__()
         if temporal_pool not in ('last', 'mean'):
             raise ValueError("temporal_pool must be 'last' or 'mean'.")
@@ -89,6 +92,15 @@ class LRCN(nn.Module):
             raise ValueError('The input CNN backbone is not supported, please choose a valid ResNet variant.')
         builder, weights = BACKBONES[cnn_model]
         base_cnn = builder(weights=weights if pretrained else None)
+        if in_channels != 3:
+            # Cross-modality initialisation for flow input: average the pretrained RGB filters
+            # over colour and copy the result to every input channel.
+            old = base_cnn.conv1
+            base_cnn.conv1 = nn.Conv2d(in_channels, old.out_channels, old.kernel_size,
+                                       old.stride, old.padding, bias=False)
+            with torch.no_grad():
+                base_cnn.conv1.weight.copy_(
+                    old.weight.mean(dim=1, keepdim=True).repeat(1, in_channels, 1, 1))
 
         # Retrieve the number of features output by the CNN's original fully-connected layer.
         num_features = base_cnn.fc.in_features
