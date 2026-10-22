@@ -51,7 +51,8 @@ def train(dataloaders, model, criterion, optimizer, scheduler, device, optim_mod
     acc_hist = {'train': [], 'val': []}
 
     best_model_wts = copy.deepcopy(model.state_dict())
-    best_val_acc = 0.0
+    # Below any reachable accuracy, so the first epoch is always saved, even at 0% accuracy.
+    best_val_acc = -1.0
 
     for epoch in range(n_epochs):
         current_lr = get_learning_rate(optimizer)
