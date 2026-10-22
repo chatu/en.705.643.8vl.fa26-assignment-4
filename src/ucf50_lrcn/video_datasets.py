@@ -82,15 +82,17 @@ class VideoDataset(Dataset):
 
         Returns:
             tuple: (frames_tensor, label) where frames_tensor is a tensor of shape (T, C, H, W)
-                   with T being the number of frames (up to fr_per_vid), uint8 if no transform
-                   is given, and label is an integer.
+                   with T equal to fr_per_vid, uint8 if no transform is given, and label is an
+                   integer. frames_tensor is an empty list if the directory holds no frames.
         """
         # Get all JPEG frame paths from the video directory, in temporal order (glob returns
-        # files in arbitrary order), and select up to fr_per_vid frames
+        # files in arbitrary order)
         fr_paths = sorted(glob.glob(self.dataset[idx][0] + '/*.jpg'), key=frame_index)
         # Sample fr_per_vid frames evenly from the first to the last, so the clip covers the
-        # whole action rather than only its opening frames.
-        if len(fr_paths) > self.fpv:
+        # whole action rather than only its opening frames. A shorter clip repeats frames
+        # instead of coming back short: collate_fn_rnn would pad it with zero frames at the
+        # end, and the classifier reads the LSTM's last step, which would then be padding.
+        if fr_paths:
             keep = np.linspace(0, len(fr_paths) - 1, self.fpv).round().astype(int)
             fr_paths = [fr_paths[i] for i in keep]
 

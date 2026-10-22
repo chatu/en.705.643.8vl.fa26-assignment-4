@@ -67,6 +67,18 @@ def test_dataset_samples_frames_across_the_whole_clip(tmp_path):
     assert numbers[-1] == 31
 
 
+def test_short_clip_still_yields_fr_per_vid_frames(tmp_path):
+    """Regression: a clip with fewer frames than fr_per_vid came back short, collate_fn_rnn
+    padded it with zero frames at the end, and the LSTM's last step, which the classifier
+    reads, was padding rather than video."""
+    dataset = VideoDataset([(_frame_dir(tmp_path, 10), 0)], fr_per_vid=16)
+    frames, _ = dataset[0]
+    numbers = [_frame_number(f.numpy()) for f in frames]
+    assert len(numbers) == 16
+    assert numbers[0] == 0 and numbers[-1] == 9
+    assert numbers == sorted(numbers)
+
+
 def test_get_frames_ignores_an_overstated_header_frame_count(numbered_video, monkeypatch):
     """Regression: the frame count was read from the container header, which overstates the
     decodable frames for some UCF50 files (240 claimed, 232 real), so the last sampled frames
