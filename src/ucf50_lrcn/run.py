@@ -129,6 +129,9 @@ def args_parser(argv=None):
     parser.add_argument('-ne', '--n_epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('-nw', '--num_workers', type=int, default=0,
                         help='Worker processes that load clips in parallel with training')
+    parser.add_argument('--out_dir', default='.',
+                        help='Where train mode writes models/ and splits.npy and eval mode reads '
+                             'splits.npy')
     parser.add_argument('--wandb_project', default=None,
                         help='Weights & Biases project to log to; logging is off if unset')
     parser.add_argument('--wandb_run_name', default=None, help='Weights & Biases run name')
@@ -211,17 +214,18 @@ def run_train(args, model, transforms, device):
     tr_split, val_split, ts_split = dataset_split(vid_dataset, args.val_groups, args.test_groups)
 
     # Save the splits for reproducibility and later use in evaluation
-    np.save('./splits.npy', {'train': np.array(tr_split), 'val': np.array(val_split),
-                             'test': np.array(ts_split)})
+    model_dir = os.path.join(args.out_dir, 'models')
+    os.makedirs(model_dir, exist_ok=True)
+    np.save(os.path.join(args.out_dir, 'splits.npy'),
+            {'train': np.array(tr_split), 'val': np.array(val_split), 'test': np.array(ts_split)})
 
     dataloaders = train_val_dloaders(
         VideoDataset(tr_split, args.fr_per_vid, tr_transforms, flow_channels),
         VideoDataset(val_split, args.fr_per_vid, val_ts_transforms, flow_channels),
         args.batch_size, args.model_type, args.num_workers)
     loss_func, opt, lr_scheduler = build_optimization(model, args.learning_rate)
-    os.makedirs('./models', exist_ok=True)
     model.to(device)
-    model, _, _ = train(dataloaders, model, loss_func, opt, lr_scheduler, device, './models',
+    model, _, _ = train(dataloaders, model, loss_func, opt, lr_scheduler, device, model_dir,
                         args.n_epochs)
 
     # Evaluate the best weights (train() returns them) on the held-out test groups
@@ -241,7 +245,7 @@ def run_eval(args, model, transforms, device):
         device (torch.device): Evaluation device.
     """
     flow_channels, _, val_ts_transforms = transforms
-    splits = np.load('./splits.npy', allow_pickle=True)
+    splits = np.load(os.path.join(args.out_dir, 'splits.npy'), allow_pickle=True)
     ts_split = [(sample[0], int(sample[1])) for sample in splits.item()['test']]
     ts_dataset = VideoDataset(ts_split, args.fr_per_vid, val_ts_transforms, flow_channels)
     # map_location: checkpoints saved during GPU training must also load on a CPU-only machine
@@ -256,7 +260,8 @@ def main(args):
     Train or evaluate an LRCN as configured by the command-line arguments.
 
     Train mode splits the data by group, trains with validation, saves the best weights to
-    ./models and the splits to ./splits.npy, then reports test accuracy of the best weights.
+    <out_dir>/models and the splits to <out_dir>/splits.npy, then reports test accuracy of the
+    best weights.
     Eval mode loads a checkpoint and reports its accuracy on the saved test split.
 
     Args:
