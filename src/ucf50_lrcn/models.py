@@ -72,11 +72,11 @@ class LRCN(nn.Module):
                                    Options: 'resnet18', 'resnet34', 'resnet50', 'resnet101',
                                    'resnet152'.
                                    Default is 'resnet34'.
-        in_channels (int, optional): Input channels per frame; 3 for RGB, 2 * FLOW_STACK for
-                                     stacked flow. Default is 3.
         temporal_pool (str, optional): 'last' classifies from the final LSTM step; 'mean'
                                        classifies every step and averages the logits over time,
                                        as in the original LRCN. Default is 'last'.
+        in_channels (int, optional): Input channels per frame; 3 for RGB, 2 * FLOW_STACK for
+                                     stacked flow. Default is 3.
 
     Raises:
         ValueError: If the specified cnn_model or temporal_pool is not supported.

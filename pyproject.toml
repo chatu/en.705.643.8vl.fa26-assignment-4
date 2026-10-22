@@ -16,7 +16,8 @@ generated-members = ["cv2.*"]
 [tool.pylint.design]
 # Training and evaluation functions take a model, loaders, optimiser, scheduler, device and
 # a few settings; bundling those into a config object only to satisfy the default of 5 would
-# hide what each function needs.
+# hide what each function needs. The same reasoning covers locals: the training loop in
+# train() has 20, the most of any function.
 max-args = 9
 max-positional-arguments = 9
 max-locals = 20

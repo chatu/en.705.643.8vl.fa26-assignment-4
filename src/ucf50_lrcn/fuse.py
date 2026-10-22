@@ -61,6 +61,7 @@ def stream_splits(frame_dir, val_groups, test_groups):
     vid_dataset, _ = load_dataset(frame_dir)
     _, val_split, ts_split = dataset_split(vid_dataset, val_groups, test_groups)
     def by_name(split):
+        """Sort (video_path, label) pairs by video name, which both streams share."""
         return sorted(split, key=lambda sample: os.path.basename(sample[0]))
     return {'val': by_name(val_split), 'test': by_name(ts_split)}
 
@@ -91,7 +92,18 @@ def load_stream(args, stream):
 
 
 def args_parser(argv=None):
-    """Parse the command-line arguments of the fusion evaluation."""
+    """
+    Parse the command-line arguments of the fusion evaluation.
+
+    The architecture options (backbone, pooling, LSTM size, frames per clip) must match the
+    ones each checkpoint was trained with.
+
+    Args:
+        argv (list of str, optional): Arguments to parse; defaults to sys.argv[1:].
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser(description='Late fusion of the RGB and flow LRCN streams')
     for stream in ('rgb', 'flow'):
         parser.add_argument(f'--{stream}_dir', required=True, help=f'Root of the {stream} folders')
@@ -99,22 +111,35 @@ def args_parser(argv=None):
         parser.add_argument(f'--{stream}_backbone', default='resnet34', help=f'{stream} backbone')
         parser.add_argument(f'--{stream}_pool', choices=['last', 'mean'], default='last',
                             help=f'{stream} temporal pooling')
-    parser.add_argument('--n_classes', type=int, required=True)
-    parser.add_argument('--fr_per_vid', type=int, default=16)
-    parser.add_argument('--rnn_hidden_size', type=int, default=100)
-    parser.add_argument('--rnn_n_layers', type=int, default=1)
-    parser.add_argument('--val_groups', type=int, nargs='+', default=[19, 20, 21])
-    parser.add_argument('--test_groups', type=int, nargs='+', default=[22, 23, 24, 25])
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--n_classes', type=int, required=True, help='Number of classes')
+    parser.add_argument('--fr_per_vid', type=int, default=16, help='Frames sampled per clip')
+    parser.add_argument('--rnn_hidden_size', type=int, default=100, help='LSTM hidden size')
+    parser.add_argument('--rnn_n_layers', type=int, default=1, help='LSTM layers')
+    parser.add_argument('--val_groups', type=int, nargs='+', default=[19, 20, 21],
+                        help='UCF50 groups held out for validation')
+    parser.add_argument('--test_groups', type=int, nargs='+', default=[22, 23, 24, 25],
+                        help='UCF50 groups held out for testing')
+    parser.add_argument('--batch_size', type=int, default=8, help='Clips per evaluation batch')
+    parser.add_argument('--num_workers', type=int, default=0, help='DataLoader worker processes')
     parser.add_argument('--wandb_project', default=None,
                         help='Weights & Biases project to log to; logging is off if unset')
-    parser.add_argument('--wandb_run_name', default=None)
+    parser.add_argument('--wandb_run_name', default=None, help='Weights & Biases run name')
     return parser.parse_args(argv)
 
 
 def main(args):
-    """Score both streams on the validation and test groups and report the fused accuracy."""
+    """
+    Score both streams on the validation and test groups and report the fused accuracy.
+
+    Args:
+        args (argparse.Namespace): Parsed arguments from args_parser.
+
+    Returns:
+        dict: Accuracy keyed '<split>/acc_<rgb|flow|fused>' for split in val and test.
+
+    Raises:
+        ValueError: If the two streams' splits do not hold the same videos.
+    """
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if args.wandb_project:
         wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))

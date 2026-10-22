@@ -38,7 +38,6 @@ def test_clip_tensor_has_the_model_input_shape(tmp_path):
     _, val_transforms = compose_data_transforms(h, w, mean, std)
     dataset = VideoDataset([(_clip_of_identical_frames(tmp_path), 0)], fr_per_vid=8,
                            transforms=val_transforms)
-    # pylint: disable=no-member  # pylint infers the [] returned for an empty clip
     frames, label = dataset[0]
     assert tuple(frames.shape) == (8, 3, h, w)
     assert frames.dtype == torch.float32

@@ -42,12 +42,12 @@ class VideoDataset(Dataset):
     PyTorch Dataset class for loading video data from directories of frame images.
 
     Each video is represented as a directory containing JPEG images of its frames.
-    The dataset is provided as a dictionary mapping each video directory path to its label.
 
     Args:
         vid_dataset (list of tuple): (video_directory_path, integer_label) pairs, as returned by
             dataset_split.
-        fr_per_vid (int): Number of frames per video to load (images are taken in order).
+        fr_per_vid (int): Number of frames per clip, sampled evenly from the first stored frame
+            to the last (repeating frames if the video has fewer).
         transforms (callable, optional): A transform applied to the whole clip, a uint8 tensor of
             shape (T, C, H, W), e.g. the torchvision.transforms.v2 pipelines from
             utils.compose_data_transforms.
@@ -83,7 +83,7 @@ class VideoDataset(Dataset):
         Returns:
             tuple: (frames_tensor, label) where frames_tensor is a tensor of shape (T, C, H, W)
                    with T equal to fr_per_vid, uint8 if no transform is given, and label is an
-                   integer. frames_tensor is an empty list if the directory holds no frames.
+                   integer. frames_tensor is empty if the directory holds no frames.
         """
         # Get all JPEG frame paths from the video directory, in temporal order (glob returns
         # files in arbitrary order)
@@ -99,7 +99,7 @@ class VideoDataset(Dataset):
         # Get the label associated with the video
         fr_label = self.dataset[idx][1]
         if not fr_paths:
-            return [], fr_label
+            return torch.empty(0), fr_label
 
         # Stack the frames into one uint8 clip tensor of shape (T, C, H, W)
         clip = torch.stack([self._load(fr_path) for fr_path in fr_paths])
@@ -226,18 +226,20 @@ def collate_fn_rnn(batch):
     """
     Collate function for RNN-based models.
 
-    Handles variable-length video sequences by padding them to the length of the longest sequence
-    in the batch. Each sample in the batch is expected to be a tuple (video_frames, label),
-    where video_frames is a tensor of shape (T, C, H, W). The function returns a padded tensor
-    of video frames with shape (batch_size, max_T, C, H, W) and a tensor of labels.
+    Each sample in the batch is a tuple (video_frames, label), where video_frames is a tensor of
+    shape (T, C, H, W). Empty clips are dropped with their labels, and the rest are padded to the
+    longest clip in the batch. VideoDataset returns exactly fr_per_vid frames per clip, so in
+    practice no padding is added; if it were, the zero frames would sit at the end, where the
+    LRCN reads its last LSTM step.
 
     Args:
         batch (list): List of samples, each as (video_frames, label).
 
     Returns:
         tuple: (padded_imgs, labels_tensor)
-            - padded_imgs (Tensor): Padded tensor of video frames.
+            - padded_imgs (Tensor): Video frames of shape (batch_size, max_T, C, H, W).
             - labels_tensor (Tensor): Tensor of labels.
+            Both are None if every clip in the batch is empty.
     """
     # Unzip the batch into image tensors and labels
     imgs_batch, label_batch = list(zip(*batch))

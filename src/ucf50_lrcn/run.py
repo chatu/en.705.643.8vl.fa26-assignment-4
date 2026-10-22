@@ -12,10 +12,11 @@ it performs the following:
     - Creates PyTorch Datasets and DataLoaders for training and validation.
     - Initializes the LRCN and defines the loss function, optimizer, and learning rate
       scheduler.
-    - Runs the training loop and saves the best model weights.
+    - Runs the training loop and saves the best model weights (by validation accuracy) to
+      <out_dir>/models, then evaluates them on the test split.
 
 - Eval mode:
-    - Loads the pre-generated dataset splits.
+    - Loads the dataset splits saved in <out_dir> by the training run.
     - Creates a DataLoader for the test set.
     - Loads the trained model checkpoint.
     - Evaluates the model on the test set and prints overall test accuracy.
@@ -73,7 +74,7 @@ def args_parser(argv=None):
         argparse.Namespace: Parsed command-line arguments.
 
     Arguments include:
-        -fd/--frame_dir: Directory for storing video frames.
+        -fd/--frame_dir: Root of the frame (or, with --modality flow, flow) folders to read.
         -vg/--val_groups: UCF50 groups held out for validation (default 19 20 21).
         -tg/--test_groups: UCF50 groups held out for testing (default 22 23 24 25).
         -fpv/--fr_per_vid: Number of frames per video to consider (default 16).
@@ -89,10 +90,15 @@ def args_parser(argv=None):
         -d/--dropout: Dropout rate for regularization (default 0.1).
         -lr/--learning_rate: Learning rate for training (default 3e-5).
         -ne/--n_epochs: Number of training epochs (default 30).
+        --modality: 'rgb' frames or 'flow' stacks (default 'rgb').
+        -tp/--temporal_pool: 'last' LSTM step or 'mean' over steps (default 'last').
+        -nw/--num_workers: DataLoader worker processes (default 0).
+        --out_dir: Where models/ and splits.npy are written and read (default '.').
+        --wandb_project, --wandb_run_name: Weights & Biases logging, off unless a project is set.
     """
     parser = argparse.ArgumentParser(description='Video Classification Training')
 
-    parser.add_argument('-fd', '--frame_dir', help='Directory for storing video frames')
+    parser.add_argument('-fd', '--frame_dir', help='Root of the frame or flow folders to read')
     parser.add_argument('-vg', '--val_groups', type=int, nargs='+', default=[19, 20, 21],
                         help='UCF50 groups held out for validation')
     parser.add_argument('-tg', '--test_groups', type=int, nargs='+', default=[22, 23, 24, 25],
@@ -119,7 +125,7 @@ def args_parser(argv=None):
     parser.add_argument('-rnl', '--rnn_n_layers', type=int, default=1,
                         help='Number of RNN/LSTM layers')
 
-    parser.add_argument('-m', '--mode', type=str, default='train', required=True,
+    parser.add_argument('-m', '--mode', type=str, required=True,
                         help="Either 'train' or 'eval'")
     parser.add_argument('-bs', '--batch_size', type=int, help='Mini-batch size', required=True)
     parser.add_argument('-d', '--dropout', type=float, default=0.1,

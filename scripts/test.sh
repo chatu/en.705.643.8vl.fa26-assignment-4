@@ -1,5 +1,7 @@
 #!/bin/bash
-# Evaluate a trained checkpoint on the held-out test groups saved by train.sh.
+# Evaluate a trained checkpoint on the held-out test groups saved by train.sh. Choose the run
+# with OUT_DIR (default runs/rgb), not --out_dir, so the checkpoint and its splits come from the
+# same run. Architecture flags (--modality, --cnn_backbone, --temporal_pool) must match training.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT_DIR=${OUT_DIR:-runs/rgb}

@@ -6,7 +6,8 @@ for video classification tasks. It includes functions for:
     - Uniformly sampling frames from videos.
     - Storing extracted frames as JPEG images.
     - Retrieving image transformation statistics based on the model type.
-    - Composing data transforms for training and validation/test datasets.
+    - Composing data transforms for training and validation/test datasets, for RGB clips and,
+      with RandomFlowFlip, for optical-flow clips.
     - Creating DataLoaders for training, validation, and testing, using custom collate functions.
 """
 
@@ -43,8 +44,9 @@ def get_frames(vid, n_frames=1):
         print("Failed to open video:", vid)
         return frames, 0
     # Count the frames that actually decode. CAP_PROP_FRAME_COUNT comes from the container
-    # header, which overstates the real count for some UCF50 files (by up to 8 frames), so
-    # indices computed from it can point past the end and the clip silently loses its ending.
+    # header, which overstates the real count for some UCF50 files (v_GolfSwing_g22_c03 claims
+    # 348 frames and decodes 276), so indices computed from it can point past the end and the
+    # clip silently loses its ending.
     v_len = 0
     while v_cap.grab():
         v_len += 1
@@ -255,7 +257,7 @@ def test_dloaders(test_dataset, batch_size, model='lrcn', num_workers=0):
         test_dataset (Dataset): PyTorch Dataset for test data.
         batch_size (int): Number of samples per batch.
         model (str): Model type; 'lrcn' for RNN-based models, otherwise for 3D CNNs.
-        num_workers (int): Worker processes that load clips in parallel with training.
+        num_workers (int): Worker processes that load clips in parallel with evaluation.
 
     Returns:
         dict: Dictionary with key 'test' mapping to the test DataLoader.

@@ -7,7 +7,7 @@ report, and compute a multilabel confusion matrix for all classes.
 
 Functions:
     - test: Evaluates the model on a test DataLoader and returns the ground truth labels,
-      predicted labels, and overall accuracy.
+      predicted labels, overall accuracy, and (given a criterion) the mean loss per video.
     - get_test_report: Generates a classification report using scikit-learn's classification_report.
     - get_confusion_matrix: Computes a multilabel confusion matrix for each class.
 """
@@ -37,6 +37,7 @@ def test(model, dataloader, device, criterion=None):
             - outputs (list): Predicted labels for all samples.
             - accuracy (float): Overall accuracy computed as the ratio of correct predictions
                                 to the total number of samples.
+            - loss (float or None): Mean criterion value per video, or None.
     """
     model.eval()
     with torch.no_grad():

@@ -85,7 +85,7 @@ def test_get_frames_ignores_an_overstated_header_frame_count(numbered_video, mon
     were never reached and 229 of 6,681 clips came out short."""
     real_capture = cv2.VideoCapture
 
-    class OverstatingCapture:  # pylint: disable=too-few-public-methods
+    class OverstatingCapture:
         """Wraps a real capture; its header claims 8 more frames than the video holds."""
 
         def __init__(self, path):
