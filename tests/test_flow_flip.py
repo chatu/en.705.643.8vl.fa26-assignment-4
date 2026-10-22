@@ -1,7 +1,9 @@
-"""Regression test for flipping flow clips."""
+"""Tests for flipping flow clips and for the flow pipeline using that flip."""
 
 import torch
+from torchvision.transforms import v2
 
+from ucf50_lrcn.run import args_parser, build_transforms
 from ucf50_lrcn.utils import RandomFlowFlip
 
 
@@ -16,3 +18,14 @@ def test_flipping_a_flow_clip_reverses_horizontal_motion_only():
     assert torch.all(flipped[:, 0::2] == 105)            # 255 - 150: leftward motion
     assert torch.all(flipped[:, 1::2, :, :-1] == 100)    # vertical motion unchanged ...
     assert torch.all(flipped[:, 1::2, :, -1] == 90)      # ... and mirrored with the image
+
+
+def test_flow_training_uses_the_flow_flip_and_never_the_image_flip():
+    """The flow stream must be built with RandomFlowFlip: the plain image flip, or the RGB
+    pipeline, would mirror frames without reversing their horizontal motion."""
+    args = args_parser(["--n_classes", "50", "--batch_size", "4", "--mode", "train",
+                        "--modality", "flow"])
+    _, train_transforms, _ = build_transforms(args)
+    steps = train_transforms.transforms
+    assert any(isinstance(step, RandomFlowFlip) for step in steps)
+    assert not any(isinstance(step, v2.RandomHorizontalFlip) for step in steps)

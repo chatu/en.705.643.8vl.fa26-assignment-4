@@ -1,9 +1,10 @@
-"""Regression tests for the optical-flow input."""
+"""Tests for the optical-flow input: how stored flow reads back, and the flip."""
 
 import cv2
 import numpy as np
 
-from ucf50_lrcn.flow import FLOW_BOUND, FLOW_STACK, video_flow_stacks
+from ucf50_lrcn.flow import FLOW_BOUND, FLOW_STACK, extract_flow
+from ucf50_lrcn.video_datasets import VideoDataset
 
 
 def _write_rightward_video(path, n_frames=20, shift=2):
@@ -18,13 +19,16 @@ def _write_rightward_video(path, n_frames=20, shift=2):
 
 
 def test_flow_channels_alternate_x_then_y(tmp_path):
-    """Channels are tiled x0, y0, x1, y1, ...; the horizontal flip negates the even ones,
-    so a swap here would make the flip reverse vertical motion instead."""
+    """Channels are x0, y0, x1, y1, ... once stored and read back by the dataset; the
+    horizontal flip negates the even ones, so a swap or a wrong unpacking here would make
+    the flip reverse vertical motion instead."""
     _write_rightward_video(tmp_path / "v.avi")
-    stacks = video_flow_stacks(str(tmp_path / "v.avi"), n_samples=4)
-    assert len(stacks) == 4
-    channels = stacks[0].reshape(2 * FLOW_STACK, 64, 96)[:, 16:48, 24:72].astype(float)
-    pixels = (channels * 2 * FLOW_BOUND / 255.0) - FLOW_BOUND
-    x_motion, y_motion = np.median(pixels[0::2], axis=(1, 2)), np.median(pixels[1::2], axis=(1, 2))
-    assert np.all(np.abs(x_motion - 2.0) < 0.5), x_motion
-    assert np.all(np.abs(y_motion) < 0.5), y_motion
+    extract_flow((str(tmp_path / "v.avi"), str(tmp_path / "flow"), 4))
+    clip, _ = VideoDataset([(str(tmp_path / "flow"), 0)], fr_per_vid=4,
+                           flow_channels=2 * FLOW_STACK)[0]
+    assert tuple(clip.shape) == (4, 2 * FLOW_STACK, 64, 96)
+    pixels = clip[0, :, 16:48, 24:72].double() * 2 * FLOW_BOUND / 255.0 - FLOW_BOUND
+    x_motion = pixels[0::2].flatten(1).median(dim=1).values
+    y_motion = pixels[1::2].flatten(1).median(dim=1).values
+    assert bool(((x_motion - 2.0).abs() < 0.5).all()), x_motion
+    assert bool((y_motion.abs() < 0.5).all()), y_motion
