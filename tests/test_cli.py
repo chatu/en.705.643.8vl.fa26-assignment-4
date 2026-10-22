@@ -3,6 +3,7 @@
 import pytest
 import torch
 
+from ucf50_lrcn import run
 from ucf50_lrcn.run import args_parser, build_optimization
 
 REQUIRED = ["--n_classes", "50", "--batch_size", "4", "--mode", "train"]
@@ -27,3 +28,18 @@ def test_training_setup_builds_on_current_pytorch():
     optimizer.step()
     scheduler.step(loss.item())
     assert optimizer.param_groups[0]["lr"] == 1e-3
+
+
+def test_eval_mode_does_not_fetch_imagenet_weights(monkeypatch):
+    """Regression: eval mode built the backbone with pretrained=True, downloading ImageNet
+    weights that the checkpoint then overwrote, so evaluation failed without network access."""
+    built = {}
+
+    def record_lrcn(**kwargs):
+        built.update(kwargs)
+        return torch.nn.Linear(1, 1)
+
+    monkeypatch.setattr(run, "LRCN", record_lrcn)
+    monkeypatch.setattr(run, "run_eval", lambda *args: None)
+    run.main(args_parser(["--n_classes", "50", "--batch_size", "4", "--mode", "eval"]))
+    assert built["pretrained"] is False

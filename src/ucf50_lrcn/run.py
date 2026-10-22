@@ -282,7 +282,9 @@ def main(args):
     transforms = build_transforms(args)
     model = LRCN(hidden_size=args.rnn_hidden_size, n_layers=args.rnn_n_layers,
                  dropout_rate=args.dropout, n_classes=args.n_classes,
-                 pretrained=args.pretrained, cnn_model=args.cnn_backbone,
+                 # ImageNet weights only matter for training; in eval the checkpoint
+                 # replaces them, so skip a download that fails without network access.
+                 pretrained=args.pretrained and args.mode == 'train', cnn_model=args.cnn_backbone,
                  temporal_pool=args.temporal_pool, in_channels=transforms[0] or 3)
     if args.mode == 'train':
         run_train(args, model, transforms, device)
