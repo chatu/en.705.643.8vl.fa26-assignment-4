@@ -116,9 +116,9 @@ def load_dataset(frame_dir):
     """
     Load the full video dataset from the specified directory.
 
-    Each subdirectory in frame_dir is assumed to correspond to a video category.
-    The function builds a dictionary where keys are paths to video directories and
-    values are integer labels corresponding to each category.
+    Each subdirectory in frame_dir is a video category and each of its subdirectories one
+    video. Hidden entries (such as macOS .DS_Store files) and plain files are skipped, so they
+    can neither become a class nor shift the labels of the real ones.
 
     Args:
         frame_dir (str): Path to the directory containing subdirectories for each video category.
@@ -128,14 +128,18 @@ def load_dataset(frame_dir):
             - vid_dataset (dict): Dictionary mapping video directory paths to integer labels.
             - label_dict (dict): Dictionary mapping video category names to integer labels.
     """
-    label_dict = {vid_cat: idx for idx, vid_cat in enumerate(sorted(os.listdir(frame_dir)))}
+    def subdirs(path):
+        """Sorted names of the visible subdirectories of path."""
+        return sorted(name for name in os.listdir(path)
+                      if not name.startswith('.') and os.path.isdir(os.path.join(path, name)))
+
+    label_dict = {vid_cat: idx for idx, vid_cat in enumerate(subdirs(frame_dir))}
     vid_dataset = {}
     print('Loading video dataset....')
-    for vid_cat in tqdm(sorted(os.listdir(frame_dir))):
+    for vid_cat in tqdm(label_dict):
         vid_cat_path = os.path.join(frame_dir, vid_cat)
-        for vid in os.listdir(vid_cat_path):
-            vid_path = os.path.join(vid_cat_path, vid)
-            vid_dataset[vid_path] = label_dict[vid_cat]
+        for vid in subdirs(vid_cat_path):
+            vid_dataset[os.path.join(vid_cat_path, vid)] = label_dict[vid_cat]
     return vid_dataset, label_dict
 
 

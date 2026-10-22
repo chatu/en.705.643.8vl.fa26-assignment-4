@@ -34,3 +34,15 @@ def test_preprocessed_frames_load_with_folder_labels_and_full_clips(tmp_path):
     brightness = [int(round(float(frame.float().mean()) / 5.0)) for frame in clip]
     assert len(brightness) == 8
     assert brightness[0] == 0 and brightness[-1] == 39
+
+
+def test_hidden_files_do_not_become_classes_or_videos(tmp_path):
+    """Regression: load_dataset listed every entry, so a macOS .DS_Store in the frame root
+    became class 0 and shifted every real label by one (or crashed as a non-directory)."""
+    for name in ("Biking", "Diving"):
+        (tmp_path / name / f"v_{name}_g01_c01").mkdir(parents=True)
+        (tmp_path / name / ".DS_Store").write_bytes(b"")
+    (tmp_path / ".DS_Store").write_bytes(b"")
+    vid_dataset, label_dict = load_dataset(str(tmp_path))
+    assert label_dict == {"Biking": 0, "Diving": 1}
+    assert sorted(vid_dataset.values()) == [0, 1]
