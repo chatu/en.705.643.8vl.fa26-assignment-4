@@ -11,7 +11,7 @@ This repository is the fixed and extended version of an LRCN (ResNet backbone, L
 | Flow stream alone (input to improvement 2) | 89.90% | 88.32% |
 | Improvement 2: RGB (improvement 1) + flow, late fusion | 94.26% | **93.26%** |
 
-All runs were logged to Weights & Biases, and screenshots of the dashboard are submitted with the assignment.
+All runs were logged to Weights & Biases; screenshots of the dashboard are under [Weights & Biases](#weights--biases).
 
 ## Repository layout
 
@@ -27,6 +27,7 @@ src/ucf50_lrcn/     the package
 scripts/            preprocess.sh, flow.sh, train.sh, test.sh, fuse.sh
 tests/              pytest regression tests for the bugs fixed, plus a few shape checks
 docs/figures/       figures used below
+docs/screenshots/   Weights & Biases and pylint screenshots
 ```
 
 ## Setup and data
@@ -47,7 +48,9 @@ scripts/test.sh                             # re-evaluate the RGB checkpoint alo
 
 Every run goes through `scripts/train.sh` and changes only the option it is testing. The shared settings are ResNet-34 pretrained on ImageNet-1k classification (the only pretraining, as the Module 7 lecture allows), 16 frames per clip, LSTM hidden size 100, batch size 4, Adam at 3e-5, ReduceLROnPlateau on validation loss, 30 epochs, and the epoch with the best validation accuracy kept. Weights & Biases logging is off unless `--wandb_project` is given.
 
-Run the checks with `pytest` (23 tests, 24 cases) and `pylint src tests` (10.00/10).
+Run the checks with `pytest` (23 tests, 24 cases) and `pylint src tests` (10.00/10):
+
+![pylint src tests rated 10.00/10](docs/screenshots/ucf50-lrcn_lint_output.png)
 
 ## Environment
 
@@ -113,6 +116,14 @@ Every training run logs train and val loss and accuracy per epoch (and train los
 | `r101` | ResNet-101 RGB stream |
 | `fuse-batched-flow` | fusion, improvement 1 + flow (final) |
 | `fuse-r101-flow` | fusion, ResNet-101 + flow |
+
+![Training loss and accuracy per epoch](docs/screenshots/wandb_train_loss_acc.png)
+
+![Validation loss and accuracy per epoch, and the fusion runs' validation accuracy](docs/screenshots/wandb_val_loss_acc.png)
+
+![Test loss and accuracy, and the fusion runs' test accuracy](docs/screenshots/wandb_test_loss_acc.png)
+
+![Final fusion run summary: test/acc_fused 0.9326](docs/screenshots/wandb_fusion_summary.png)
 
 Predictions of the final RGB stream on one test clip from each of eight classes, drawn with `visualize --split test --ckpt <rgb checkpoint>`; the RGB stream alone misses the pull-up, which it confuses with a clean and jerk:
 
